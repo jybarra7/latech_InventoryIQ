@@ -1,34 +1,5 @@
-# utils/processor.py
-
 import pandas as pd
-from datetime import datetime
 
-def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Maps raw dataset into retail_clean schema.
-    """
-
-    df = df.copy()
-
-    # --- Rename columns ---
-    df = df.rename(columns={
-        "store": "store_id",
-        "item": "product_id",
-        "sales": "sales"
-    })
-
-    # --- Parse date ---
-    df["date"] = pd.to_datetime(df["date"])
-
-    # --- Generated fields ---
-    df["product_name"] = "Item " + df["product_id"].astype(str)
-    df["category"] = "Uncategorized"
-    df["quantity"] = df["sales"]
-
-    return df
-# utils/processor.py
-
-import pandas as pd
 
 def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -67,7 +38,6 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # -------------------------
     # 5. LAG FEATURES
-    # (previous values per product-store group)
     # -------------------------
     df["sales_lag_1"] = df.groupby(["product_id", "store_id"])["sales"].shift(1)
     df["sales_lag_3"] = df.groupby(["product_id", "store_id"])["sales"].shift(3)
@@ -79,12 +49,11 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df.groupby(["product_id", "store_id"])["sales"]
         .rolling(window=4, min_periods=1)
         .mean()
-        .reset_index(level=[0,1], drop=True)
+        .reset_index(level=[0, 1], drop=True)
     )
 
     # -------------------------
     # 7. VELOCITY FEATURE
-    # (change in demand)
     # -------------------------
     df["quantity_velocity"] = df["sales"] - df["sales_lag_1"]
 
