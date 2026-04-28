@@ -14,7 +14,6 @@ SCHEMA = {
     "sales": "float",
     "quantity": "float",
 
-    # Optional (inactive)
     "profit": None,
     "region": None,
     "transaction_count": None,
