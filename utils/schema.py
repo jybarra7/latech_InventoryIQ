@@ -18,3 +18,5 @@ SCHEMA = {
     "region": None,
     "transaction_count": None,
 }
+
+OPTIONAL_COLUMNS = ["profit", "region", "transaction_count"]

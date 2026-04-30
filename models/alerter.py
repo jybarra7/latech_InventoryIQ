@@ -204,10 +204,7 @@ def run_all_alerts(df: pd.DataFrame, thresholds: dict = {}) -> pd.DataFrame:
         warnings.simplefilter("ignore", FutureWarning)
         combined = pd.concat([anomalies, declines, margins], ignore_index=True)
 
-    if combined.empty:
-        return combined
-
-    combined = combined.sort_values("severity", ascending=False).reset_index(drop=True)
+    combined = combined.sort_values("severity", ascending=False).reset_index(drop=True) if not combined.empty else combined
     combined.to_csv(ALERTS_CSV_PATH, index=False)
 
     print(f"Exported {len(combined)} alerts to {ALERTS_CSV_PATH}")
