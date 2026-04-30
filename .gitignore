@@ -9,6 +9,7 @@ venv/
 
 # Data files (ignore CSVs but keep the folder)
 *.csv
+*.xlsx
 !data/retail_clean.csv
 
 # OS
