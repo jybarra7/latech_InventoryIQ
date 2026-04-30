@@ -9,7 +9,7 @@ A reusable retail forecasting engine that ingests historical sales data, forecas
 |------|------|-------------------|
 | Project Lead · Integration & Debug | Mira Bhakta | End-to-end integration, cross-role debugging, pipeline coordination |
 | Co-Project Lead · Alerting Engine · Forecasting Co-Owner | James Ybarra | `models/alerter.py`, `models/forecaster.py` (co-owner) |
-| Data Preparation & Schema Mapping · Dashboard Support | Andrew Garcia Leopold | `utils/processor.py` |
+| Data Preparation & Schema Mapping · Dashboard Support | Andrew Garcia Leopold | `utils/processor.py` - schema mapping + derived fields |
 | Data Preparation (Derived Fields) · AI Insights Support | Krisna Vega | `utils/trend.py` + derived fields in `processor.py` |
 | Forecasting Engine · Alerting Co-Owner | Alberto Barboza | `models/forecaster.py`, `models/alerter.py` (co-owner) |
 | AI Insights & Reporting · Dashboard Support | Sarah Abdeen | `utils/ai_summary.py` + AI Summary panel in `app.py` |
@@ -46,6 +46,7 @@ A reusable retail forecasting engine that ingests historical sales data, forecas
 
 ## Features
 - Upload any retail sales CSV and get an analysis-ready dashboard
+- Schema mapping and clean dataset export for downstream pipeline stages
 - Demand forecasts for the next 1–3 months with model accuracy comparison
 - Automated alert panel flagging anomalies, declining demand, and margin losses
 - Plain-English AI summary generated on demand via the Gemini API
