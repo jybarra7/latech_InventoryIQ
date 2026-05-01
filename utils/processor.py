@@ -37,6 +37,13 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
 
 SOURCE_MAPPINGS = {
+    # Clean format: already uses the shared project column names.
+    "retail_clean": {
+        "required_columns": {"date", "store_id", "product_id", "sales"},
+        "rename_columns": {},
+        "defaults": {"category": "Uncategorized"},
+        "id_fields": {},
+    },
     # Kaggle format: has store and item IDs already.
     "store_item_demand": {
         "required_columns": {"date", "store", "item", "sales"},
