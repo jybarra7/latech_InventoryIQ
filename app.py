@@ -1,96 +1,1208 @@
+"""
+app.py — Retail Forecasting Dashboard (Main Entry Point)
+---------------------------------------------------------
+Owned by: Justin (Integration Lead)
+Purpose:  The single Streamlit app file that wires together every team
+          member's output into one cohesive dashboard. This file:
+            - Loads and normalizes retail sales data (Andrew's processor)
+            - Loads Alberto's LightGBM forecast predictions
+            - Runs James's alert engine on the filtered dataset
+            - Renders all charts, KPIs, and panels
+            - Calls Sarah's Gemini AI summary with real dashboard data
+
+Team modules consumed:
+    models/alerter.py     → James  — anomaly + demand decline detection
+    utils/processor.py    → Andrew — CSV normalization + feature flags
+    utils/ai_summary.py   → Sarah  — Gemini AI summary generation
+    data/forecastUpdated.csv → Alberto — LightGBM predictions for 2018
+
+Run with: streamlit run app.py
+"""
+
 import streamlit as st
 import pandas as pd
-
-from dotenv import load_dotenv
+import plotly.graph_objects as go
+from datetime import timedelta
+import sys
 import os
 
-from utils.processor import load_and_clean_data
-from utils.trend import compute_trend
-from utils.ai_summary import build_payload, generate_summary
+# ── Team module imports ──────────────────────────────────────────────────────
+# We append to sys.path so Python can find modules in subdirectories
+# without requiring an installed package structure.
 
-# ------------------------
-# ENV SETUP (NOT IMPORTS)
-# ------------------------
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+sys.path.append(os.path.join(os.path.dirname(__file__), "models"))
+from alerter import run_all_alerts  # James's alert engine
 
-# ------------------------
-# APP START
-# ------------------------
-st.title("LA Tech Teams Dashboard")
+sys.path.append(os.path.join(os.path.dirname(__file__), "utils"))
+from processor import map_to_clean_schema, get_feature_flags  # Andrew's processor
+from ai_summary import test_gemini  # Sarah's Gemini integration
 
-uploaded_file = st.file_uploader("Upload train.csv", type=["csv"])
-st.write("Waiting for file upload...")
+# ── Page configuration ───────────────────────────────────────────────────────
+# Must be the first Streamlit call in the file — sets browser tab title
+# and uses wide layout so the dashboard fills the full screen width.
 
-if uploaded_file:
-    st.write("File uploaded successfully!")
+st.set_page_config(
+    page_title="Retail Forecasting Dashboard",
+    layout="wide"
+)
 
-    df = pd.read_csv(uploaded_file)
-    df = load_and_clean_data(df)
+# ── CSS styling ──────────────────────────────────────────────────────────────
+# Google Sheets inspired design — flat, clean, professional.
+# We use !important flags throughout because Streamlit injects its own
+# inline styles that would otherwise override our custom CSS.
+# Key design tokens:
+#   #0f9d58 = Google Sheets green (primary accent)
+#   #202124 = near-black (body text)
+#   #5f6368 = medium gray (labels, captions)
+#   #e0e0e0 = light gray (borders)
+#   #f3f3f3 = off-white (page background, matching Sheets canvas)
 
-    st.subheader("Processed Data")
-    st.dataframe(df)
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&family=Roboto:wght@300;400;500&display=swap');
 
-    # ------------------------
-    # Filters
-    # ------------------------
-    st.sidebar.header("Filters")
+    html, body, [class*="css"] {
+        font-family: 'Google Sans', 'Roboto', sans-serif !important;
+    }
 
-    store = st.sidebar.selectbox("Store", sorted(df["store_id"].unique()))
-    product = st.sidebar.selectbox("Product", sorted(df["product_id"].unique()))
+    /* Top navigation bar — Google Sheets green */
+    header[data-testid="stHeader"] {
+        background-color: #0f9d58 !important;
+        z-index: 999999 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        position: fixed !important;
+        border-bottom: 1px solid #0b8043 !important;
+    }
 
-    # ------------------------
-    # Filtered Data
-    # ------------------------
-    filtered = df[
-        (df["store_id"] == store) &
-        (df["product_id"] == product)
-    ]
+    /* Main page background — Sheets canvas gray */
+    .stApp { background-color: #f3f3f3; }
 
-    # ------------------------
-    # Trend
-    # ------------------------
-    trend = compute_trend(filtered)
-    st.subheader("Trend")
-    st.write(trend)
+    .main .block-container {
+        padding-top: 3.5rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        max-width: 100% !important;
+    }
 
-    # ------------------------
-    # Chart
-    # ------------------------
-    st.subheader("Sales Over Time")
-    st.line_chart(filtered.set_index("date")["sales"])
+    /* Sidebar — white with right border like Sheets panel */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 1px solid #e0e0e0 !important;
+    }
 
-    # ------------------------
-    # AI SUMMARY (NEW)
-    # ------------------------
-    st.subheader("AI Summary")
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] label {
+        color: #3c4043 !important;
+        font-family: 'Google Sans', 'Roboto', sans-serif !important;
+        font-size: 0.8rem !important;
+    }
 
-    # session state (prevents repeated API calls)
-    if "summary" not in st.session_state:
-        st.session_state.summary = None
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #202124 !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+    }
 
-    if st.button("Generate Summary"):
-        with st.spinner("Generating insights..."):
+    /* Filter dropdowns — flat Sheets style */
+    [data-baseweb="select"] > div:first-child,
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+    [data-testid="stMultiSelect"] div[data-baseweb="select"] {
+        background-color: #ffffff !important;
+        border: 1px solid #dadce0 !important;
+        border-radius: 4px !important;
+        box-shadow: none !important;
+        font-size: 0.8rem !important;
+    }
 
-            # replace later with real outputs
-            model_name = "Linear Regression"
-            accuracy = 0.87
+    [data-baseweb="select"] span,
+    [data-baseweb="select"] div,
+    [data-testid="stSelectbox"] span,
+    [data-testid="stMultiSelect"] span,
+    input[aria-autocomplete="list"] {
+        color: #3c4043 !important;
+        font-size: 0.8rem !important;
+    }
 
-            # Dummy alerts
-            alerts_df = pd.DataFrame([
-                {"product": "Milk", "alert_type": "demand drop", "severity": 0.9},
-                {"product": "Bread", "alert_type": "low margin", "severity": 0.8},
-                {"product": "Eggs", "alert_type": "volatility spike", "severity": 0.7}
-            ])
+    [data-baseweb="popover"] {
+        background-color: #ffffff !important;
+        border: 1px solid #dadce0 !important;
+        border-radius: 4px !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12) !important;
+    }
 
-            payload = build_payload(trend, model_name, accuracy, alerts_df)
-            result = generate_summary(payload)
+    [data-baseweb="popover"] li { color: #3c4043 !important; font-size: 0.8rem !important; }
+    [data-baseweb="popover"] li:hover { background-color: #f1f3f4 !important; }
 
-            if result["status"] == "success":
-                st.session_state.summary = result["text"]
+    /* Selected multiselect pills — green accent */
+    [data-testid="stMultiSelect"] span[data-baseweb="tag"] {
+        background-color: #e6f4ea !important;
+        color: #0b8043 !important;
+        border-radius: 2px !important;
+        font-weight: 500 !important;
+        font-size: 0.75rem !important;
+        border: 1px solid #ceead6 !important;
+    }
+
+    [data-testid="stMultiSelect"] span[data-baseweb="tag"] svg { fill: #0b8043 !important; }
+
+    .stSidebar label {
+        color: #5f6368 !important;
+        font-size: 0.72rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    /* File uploader — the ::after trick fixes Streamlit's double-text bug
+       where the button label renders twice due to a known Streamlit issue */
+    [data-testid="stFileUploader"] section {
+        background-color: #ffffff !important;
+        border: 1px solid #dadce0 !important;
+        border-radius: 4px !important;
+        padding: 0.75rem !important;
+    }
+
+    [data-testid="stFileUploader"] section button {
+        background-color: #ffffff !important;
+        color: #0f9d58 !important;
+        font-weight: 500 !important;
+        border: 1px solid #dadce0 !important;
+        border-radius: 4px !important;
+        width: 100% !important;
+        overflow: hidden !important;
+        text-indent: -9999px !important;
+        position: relative !important;
+    }
+
+    [data-testid="stFileUploader"] section button::after {
+        content: "Choose File" !important;
+        text-indent: 0 !important;
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        color: #0f9d58 !important;
+        font-size: 0.8rem !important;
+    }
+
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] p,
+    [data-testid="stFileUploader"] span,
+    [data-testid="stFileUploader"] div {
+        color: #80868b !important;
+        font-size: 0.75rem !important;
+    }
+
+    h1, h2, h3 {
+        background-color: transparent !important;
+        color: #202124 !important;
+        font-family: 'Google Sans', 'Roboto', sans-serif !important;
+    }
+
+    /* KPI metric cards — flat cells with green top accent border */
+    div[data-testid="metric-container"],
+    div[data-testid="stMetric"],
+    [data-testid="metric-container"],
+    [data-testid="stMetric"] {
+        background-color: #ffffff !important;
+        padding: 1.25rem 1.5rem !important;
+        border-radius: 0 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-top: 3px solid #0f9d58 !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="column"] div[data-testid="stVerticalBlock"] {
+        background-color: #ffffff !important;
+        padding: 1rem !important;
+        border-radius: 0 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-top: 3px solid #0f9d58 !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="column"] { flex: 1 1 0 !important; min-width: 0 !important; }
+
+    div[data-testid="metric-container"],
+    div[data-testid="stMetric"] { width: 100% !important; }
+
+    [data-testid="stMetricLabel"] {
+        color: #5f6368 !important;
+        font-size: 0.7rem !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: #202124 !important;
+        font-size: 1.8rem !important;
+        font-weight: 400 !important;
+        font-family: 'Roboto', sans-serif !important;
+    }
+
+    [data-testid="stMetricDelta"] { font-size: 0.75rem !important; font-weight: 400 !important; }
+
+    /* Force delta text to be dark regardless of Streamlit's color injection */
+    [data-testid="stMetricDelta"] span,
+    [data-testid="stMetricDelta"] p,
+    [data-testid="stMetricDelta"] div,
+    [data-testid="stMetricDelta"] > div > div,
+    [data-testid="stMetricDelta"] svg ~ div,
+    [data-testid="stMetricDelta"] * { color: #202124 !important; }
+
+    /* Buttons — outlined green, Sheets style */
+    .stButton>button {
+        background-color: #ffffff !important;
+        color: #0f9d58 !important;
+        border: 1px solid #dadce0 !important;
+        border-radius: 4px !important;
+        font-weight: 500 !important;
+        font-size: 0.8rem !important;
+        width: 100% !important;
+        padding: 0.4rem 1rem !important;
+    }
+
+    .stButton>button:hover {
+        background-color: #e6f4ea !important;
+        border-color: #0f9d58 !important;
+    }
+
+    /* Dropdown menus — force white background so options are readable */
+    [data-baseweb="popover"] ul { background-color: #ffffff !important; }
+    [data-baseweb="popover"] li { color: #3c4043 !important; background-color: #ffffff !important; font-size: 0.8rem !important; }
+    [data-baseweb="popover"] li:hover { background-color: #e6f4ea !important; color: #0b8043 !important; }
+    [data-baseweb="menu"] { background-color: #ffffff !important; }
+    [data-baseweb="menu"] * { color: #3c4043 !important; background-color: #ffffff !important; }
+
+    /* Make X and chevron icons visible on select boxes */
+    [data-testid="stMultiSelect"] svg { fill: #3c4043 !important; opacity: 1 !important; }
+    [data-testid="stSelectbox"] svg { fill: #3c4043 !important; opacity: 1 !important; }
+
+    </style>
+""", unsafe_allow_html=True)
+
+# ── Sidebar header ───────────────────────────────────────────────────────────
+
+st.sidebar.markdown("""
+    <div style='padding: 1rem 0 1rem 0; border-bottom: 1px solid #e0e0e0; margin-bottom: 1rem;'>
+        <h2 style='color: #202124; font-size: 1.1rem; font-weight: 500; margin: 0;'>
+            Retail Forecast
+        </h2>
+    </div>
+""", unsafe_allow_html=True)
+
+# ── File uploader ────────────────────────────────────────────────────────────
+# Single uploader handles two types of CSV:
+#   1. Alberto's forecast file — detected by presence of 'actual' + 'prediction' columns
+#   2. Retail sales file — everything else, passed through Andrew's processor
+# This way the manager only needs one upload button regardless of file type.
+
+st.sidebar.markdown("""
+    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500; 
+              text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;'>
+        Upload Data
+    </p>
+""", unsafe_allow_html=True)
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload CSV",
+    type=["csv"],
+    label_visibility="collapsed",
+    key="main_uploader"
+)
+
+# Peek at the uploaded file to determine its type before loading.
+# We read the first few rows, check the column names, then reset the
+# file pointer so it can be fully read again below.
+uploaded_forecast = None
+if uploaded_file is not None:
+    peek_df = pd.read_csv(uploaded_file)
+    uploaded_file.seek(0)
+    if 'actual' in peek_df.columns and 'prediction' in peek_df.columns:
+        # This is Alberto's forecast file — route to forecast loader
+        uploaded_forecast = uploaded_file
+        uploaded_file = None  # Don't pass to retail loader
+
+# ── Data loading ─────────────────────────────────────────────────────────────
+# Cached so the app doesn't re-read the CSV on every user interaction.
+# If an uploaded file is missing the standard 'store_id' column, it gets
+# normalized through Andrew's map_to_clean_schema() automatically.
+
+@st.cache_data
+def load_data(file=None):
+    """
+    Load retail sales data from an uploaded CSV or the default benchmark dataset.
+
+    Tries uploaded file first, falls back to data/retail_clean.csv.
+    If the uploaded file uses non-standard column names (e.g. 'store' instead
+    of 'store_id'), Andrew's processor normalizes it to the standard schema.
+
+    Returns:
+        df (DataFrame): Clean data ready for filtering and analysis
+        data_source (str): Label shown in the page subtitle
+    """
+    if file is not None:
+        raw_df = pd.read_csv(file)
+        if 'store_id' not in raw_df.columns:
+            # Non-standard schema — run through Andrew's normalizer
+            df = map_to_clean_schema(raw_df)
+        else:
+            df = raw_df
+        data_source = "User Uploaded Data"
+    else:
+        df = pd.read_csv("data/retail_clean.csv")
+        data_source = "Benchmark Dataset"
+    df["date"] = pd.to_datetime(df["date"])
+    return df, data_source
+
+df, data_source = load_data(uploaded_file)
+
+# Get feature flags from Andrew's processor — tells us which optional columns
+# (profit, region, transaction_count) are present so we can enable/disable
+# features that depend on them without crashing.
+feature_flags = get_feature_flags(df)
+
+# ── Load Alberto's forecast data ─────────────────────────────────────────────
+# Alberto's LightGBM model outputs predictions per store/item/day for 2018.
+# We load from an uploaded file first, then fall back to data/forecastUpdated.csv,
+# and return None if neither exists so the app degrades gracefully.
+
+@st.cache_data
+def load_forecasts(file=None):
+    """
+    Load Alberto's forecast output (predictions per store/item/day).
+
+    Falls back to data/forecastUpdated.csv if no file is uploaded.
+    Returns None if neither source is available — the app handles this
+    gracefully by falling back to the 8% growth formula for the chart.
+
+    Expected columns: date, store, item, actual, prediction, residual, method_name
+    Note: In the new forward-forecast file, actual and residual are empty
+          because these sales haven't happened yet — only prediction is filled.
+    """
+    if file is not None:
+        df_f = pd.read_csv(file)
+        df_f['date'] = pd.to_datetime(df_f['date'])
+        return df_f
+    forecast_path = os.path.join(os.path.dirname(__file__), "data", "forecastUpdated.csv")
+    if os.path.exists(forecast_path):
+        df_f = pd.read_csv(forecast_path)
+        df_f['date'] = pd.to_datetime(df_f['date'])
+        return df_f
+    return None
+
+forecasts_df = load_forecasts(uploaded_forecast)
+
+# ── Auto-reset filters on new file upload ────────────────────────────────────
+# When a new file is uploaded, the available stores/categories change.
+# Without resetting, old filter selections can cause an empty dataframe crash.
+# We track the last uploaded filename and increment reset_counter when it changes,
+# which forces all keyed widgets to re-render with their default values.
+
+if 'last_upload' not in st.session_state:
+    st.session_state.last_upload = None
+
+current_upload = uploaded_file.name if uploaded_file else None
+if current_upload != st.session_state.last_upload:
+    st.session_state.last_upload = current_upload
+    st.session_state.reset_counter = st.session_state.get('reset_counter', 0) + 1
+    st.rerun()
+
+# ── Page title ───────────────────────────────────────────────────────────────
+# Placed AFTER data loading so dataset_label can reference data_source
+# and current_upload which are now defined.
+
+dataset_label = (
+    "Benchmark dataset loaded"
+    if data_source == "Benchmark Dataset"
+    else f"Custom dataset loaded · {current_upload}"
+)
+
+st.markdown(f"""
+    <div style='margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e0e0e0;'>
+        <h1 style='font-size: 1.5rem; font-weight: 500; color: #202124; margin: 0;'>
+            Sales Forecasting Dashboard
+        </h1>
+        <p style='color: #5f6368; font-size: 0.875rem; margin: 0.25rem 0 0 0;'>
+            Retail performance overview · {dataset_label}
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+# ── Data mapping panel ───────────────────────────────────────────────────────
+# Shows the manager which fields were detected in their uploaded data.
+# Green dot = field found and active. Red dot = field missing, feature disabled.
+# This fulfills the spec requirement: "show a simple panel listing what was found."
+
+st.sidebar.markdown("""
+    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500; 
+              text-transform: uppercase; letter-spacing: 0.05em; 
+              margin: 1.25rem 0 0.5rem 0;'>
+        Data Mapping
+    </p>
+""", unsafe_allow_html=True)
+
+date_dot     = "🟢" if "date"       in df.columns else "🔴"
+sales_dot    = "🟢" if "sales"      in df.columns else "🔴"
+store_dot    = "🟢" if "store_id"   in df.columns else "🔴"
+product_dot  = "🟢" if "product_id" in df.columns else "🔴"
+category_dot = "🟢" if "category"   in df.columns else "🔴"
+quantity_dot = "🟢" if "quantity"   in df.columns else "🔴"
+
+st.sidebar.markdown(f"""
+    <div style='background-color: #f8f9fa; padding: 0.75rem 1rem; 
+                border-radius: 4px; border: 1px solid #e0e0e0; line-height: 2;'>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{date_dot} Date</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{sales_dot} Sales</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{store_dot} Store ID</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{product_dot} Product</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{category_dot} Category</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{quantity_dot} Quantity</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# ── Sidebar filters ───────────────────────────────────────────────────────────
+# All filter widgets are keyed to reset_counter so that clicking Reset Filters
+# or uploading a new file forces them to re-render with default values.
+# This is the only reliable way to programmatically reset Streamlit widgets.
+
+st.sidebar.markdown("""
+    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500; 
+              text-transform: uppercase; letter-spacing: 0.05em; 
+              margin: 1.25rem 0 0.5rem 0;'>
+        Filters
+    </p>
+""", unsafe_allow_html=True)
+
+if 'reset_counter' not in st.session_state:
+    st.session_state.reset_counter = 0
+
+# Date range always covers all available data — the forecast horizon slider
+# controls how far the orange projection line extends, not the date range.
+start_date = df['date'].min()
+end_date = df['date'].max()
+
+# Forecast horizon — controls how many months of predictions are shown
+# on the chart and summed in the Projected Revenue KPI card.
+projection_option = st.sidebar.selectbox(
+    "Forecast Horizon",
+    options=["Next 30 days", "Next 60 days", "Next 90 days", "Next 6 months", "Next 12 months"],
+    index=2,  # Default: Next 90 days
+    key=f"projection_{st.session_state.reset_counter}"
+)
+
+projection_days_map = {
+    "Next 30 days": 30, "Next 60 days": 60, "Next 90 days": 90,
+    "Next 6 months": 180, "Next 12 months": 365,
+}
+projection_days = projection_days_map[projection_option]
+
+# Store filter — all stores selected by default
+stores = sorted(df['store_id'].unique())
+selected_stores = st.sidebar.multiselect(
+    "Store", options=stores, default=stores,
+    key=f"stores_{st.session_state.reset_counter}"
+)
+
+# Category filter — all categories selected by default
+categories = sorted(df['category'].unique())
+selected_categories = st.sidebar.multiselect(
+    "Category", options=categories, default=categories,
+    key=f"categories_{st.session_state.reset_counter}"
+)
+
+# Reset button — increments reset_counter which forces all keyed widgets
+# to re-render as brand new widgets with their default values
+if st.sidebar.button("Reset Filters"):
+    st.session_state.reset_counter += 1
+    st.rerun()
+
+# Alert sensitivity slider — wired directly to James's alerter thresholds.
+# Lower value = more sensitive (catches smaller anomalies).
+# Higher value = less sensitive (only flags obvious problems).
+# Default of 2.0 matches James's built-in default threshold.
+st.sidebar.markdown("""
+    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500; 
+              text-transform: uppercase; letter-spacing: 0.05em; 
+              margin: 1rem 0 0.25rem 0;'>
+        Alert Sensitivity
+    </p>
+""", unsafe_allow_html=True)
+
+sensitivity = st.sidebar.slider(
+    "Threshold", min_value=0.5, max_value=3.0, value=2.0, step=0.25,
+    help="Lower = catches more alerts. Higher = only flags major issues.",
+    key=f"sensitivity_{st.session_state.reset_counter}"
+)
+
+# ── Apply filters ─────────────────────────────────────────────────────────────
+# df_filtered is the single source of truth for everything below this point.
+# Every KPI, chart, alert, and table reads from this filtered dataset.
+# Changing any filter updates df_filtered which triggers a full re-render.
+
+df_filtered = df[
+    (df['date'] >= pd.to_datetime(start_date)) &
+    (df['date'] <= pd.to_datetime(end_date)) &
+    (df['store_id'].isin(selected_stores)) &
+    (df['category'].isin(selected_categories))
+].copy()
+
+# Guard against empty filtered data — show a friendly message instead of crashing
+if len(df_filtered) == 0:
+    st.markdown("""
+        <div style='background-color: #fce8e6; border-left: 4px solid #d93025; 
+                    padding: 1rem 1.25rem; border-radius: 4px; color: #202124;'>
+            No data matches your current filters. Please adjust your selections.
+        </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+# ── Alert engine ──────────────────────────────────────────────────────────────
+# Runs James's alerter on the filtered dataset every time filters change.
+# We don't cache alerts because they need to update on every filter change —
+# caching was causing stale results when new files were uploaded.
+# The sensitivity slider value is passed directly to James's thresholds dict
+# so the manager can control alert aggressiveness without touching any code.
+
+alerts_df = run_all_alerts(df_filtered, thresholds={
+    'anomaly_std':  sensitivity,        # z-score cutoff for sales spikes/drops
+    'decline_pct':  sensitivity * 0.1,  # % decline threshold scales with sensitivity
+    'margin_floor': 0.0                 # margin floor uses James's default
+})
+
+# ── Sales trend calculation ───────────────────────────────────────────────────
+# Derives trend direction from the filtered historical sales data so the KPI
+# reflects whatever store/category the manager is currently looking at.
+# Method: split the time range in half, compare first half avg vs second half avg.
+# A 2% buffer on either side prevents flat data from being mislabeled.
+
+if forecasts_df is not None:
+    # Calculate MAE only if residuals are present (older validation files have them;
+    # the new forward-forecast file has empty residual/actual columns)
+    residuals_available = forecasts_df['residual'].notna().any()
+    mae           = round(abs(forecasts_df['residual']).mean(), 2) if residuals_available else None
+    avg_pct_error = round((abs(forecasts_df['residual']) / forecasts_df['actual'] * 100).mean(), 1) if residuals_available else None
+    method_used   = forecasts_df['method_name'].iloc[0]
+
+    # Aggregate daily sales by date, split in half, compare averages
+    sorted_sales    = df_filtered.sort_values('date').groupby('date')['sales'].sum().tolist()
+    mid             = len(sorted_sales) // 2
+    first_half_avg  = sum(sorted_sales[:mid]) / max(len(sorted_sales[:mid]), 1)
+    second_half_avg = sum(sorted_sales[mid:]) / max(len(sorted_sales[mid:]), 1)
+    pct_change      = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+
+    if pct_change > 2:
+        trend_label = "↑ Increasing"
+        trend_delta = f"+{pct_change:.1f}% vs prior period"
+        trend_color = "normal"   # Streamlit renders green for positive normal delta
+    elif pct_change < -2:
+        trend_label = "↓ Declining"
+        trend_delta = f"{pct_change:.1f}% vs prior period"
+        trend_color = "normal"   # Negative number + normal color = red arrow
+    else:
+        trend_label = "Steady"
+        trend_delta = f"~{pct_change:.1f}% vs prior period"
+        trend_color = "off"      # Gray delta for flat/neutral
+else:
+    # Alberto's file not loaded — show placeholder
+    trend_label = "Pending"
+    trend_delta = "Waiting for forecasts.csv"
+    trend_color = "off"
+    mae = None
+    avg_pct_error = None
+    method_used = None
+
+# ── Forecast values calculation ───────────────────────────────────────────────
+# Calculated here (before the KPI row) so forecast_values is available for
+# both the Projected Revenue KPI card (col4) and the chart below.
+# Primary source: Alberto's LightGBM predictions filtered to future dates only.
+# Fallback: 8% annual growth formula if Alberto's data is older than the history.
+
+df_chart = df_filtered.groupby(
+    df_filtered['date'].dt.to_period('M')
+)['sales'].sum().reset_index()
+df_chart.columns = ['period', 'sales']
+df_chart['period'] = df_chart['period'].astype(str)
+
+# Drop the last month if it's incomplete (less than 90% of days present).
+# This prevents a misleading dip at the end of the historical line when the
+# dataset cuts off mid-month (e.g. December showing $625k instead of $928k).
+last_month_date = df_filtered['date'].max()
+days_in_last_month = pd.Period(last_month_date, 'M').days_in_month
+days_present = df_filtered[
+    df_filtered['date'].dt.to_period('M') == pd.Period(last_month_date, 'M')
+]['date'].dt.day.nunique()
+if days_present < days_in_last_month * 0.9:
+    df_chart = df_chart.iloc[:-1]
+
+last_period_dt = df_filtered['date'].max()
+last_value = df_chart['sales'].iloc[-1]
+months_ahead = max(1, projection_days // 30)
+
+if forecasts_df is not None:
+    # Filter Alberto's predictions to only dates AFTER the historical data ends.
+    # This prevents 2018 forecasts from plotting behind a 2019-2023 historical line.
+    fc = forecasts_df.copy()
+    fc = fc[fc['date'] > last_period_dt]
+
+    if len(fc) > 0:
+        # Aggregate daily per-store/item predictions into monthly totals
+        # to match the scale of the historical monthly line
+        fc['period'] = fc['date'].dt.to_period('M').astype(str)
+        fc_monthly = fc.groupby('period')['prediction'].sum().reset_index()
+        fc_monthly = fc_monthly.sort_values('period').head(months_ahead)
+        forecast_periods = fc_monthly['period'].tolist()
+        forecast_values  = fc_monthly['prediction'].tolist()
+    else:
+        # Alberto's data is older than the historical dataset — use growth formula
+        growth_per_day = (1.08 ** (1/365))
+        forecast_periods = [(last_period_dt + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(months_ahead)]
+        forecast_values  = [last_value * (growth_per_day ** (30 * (i+1))) for i in range(months_ahead)]
+else:
+    # Alberto's file not available at all — use growth formula as fallback
+    growth_per_day = (1.08 ** (1/365))
+    forecast_periods = [(last_period_dt + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(months_ahead)]
+    forecast_values  = [last_value * (growth_per_day ** (30 * (i+1))) for i in range(months_ahead)]
+
+last_period = df_chart['period'].iloc[-1]
+
+# ── Top 5 Best and Worst Sellers calculation ──────────────────────────────────
+# Aggregated from df_filtered so it updates when store/category filters change.
+# Uses product_name if available (custom uploads), falls back to product_id
+# (benchmark dataset which doesn't have a product_name column).
+
+name_col = 'product_name' if 'product_name' in df_filtered.columns else 'product_id'
+product_sales = (
+    df_filtered.groupby(name_col)['sales']
+    .sum()
+    .reset_index()
+    .rename(columns={name_col: 'product', 'sales': 'total_sales'})
+    .sort_values('total_sales', ascending=False)
+)
+
+top5    = product_sales.head(5).reset_index(drop=True)
+bottom5 = product_sales.tail(5).sort_values('total_sales', ascending=True).reset_index(drop=True)
+
+# ── Category breakdown calculation ───────────────────────────────────────────
+# Revenue summed per category from the filtered dataset.
+# Used for both the bar chart (absolute revenue) and donut chart (% share).
+
+category_sales = (
+    df_filtered.groupby('category')['sales']
+    .sum()
+    .reset_index()
+    .rename(columns={'sales': 'total_sales'})
+    .sort_values('total_sales', ascending=False)
+)
+
+# Distinct color palette for up to 8 categories — professional and accessible
+category_colors = [
+    '#0f9d58', '#1a73e8', '#f29900', '#d93025',
+    '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'
+]
+
+# ── AI Summary panel ──────────────────────────────────────────────────────────
+# Powered by Sarah's Gemini integration (utils/ai_summary.py).
+# The summary is cached in session_state so it doesn't re-run on every
+# filter change — only when the manager explicitly clicks Generate.
+# We pass real dashboard metrics so the AI writes something specific
+# to the current data, not a generic retail summary.
+
+st.markdown("""
+    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                border-radius: 0; border: 1px solid #e0e0e0;
+                border-top: 3px solid #1a73e8; margin-bottom: 1.5rem;'>
+        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+            AI Insights
+        </p>
+        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+            Generate a plain-English summary of your current data
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+# Initialize AI summary cache in session state on first load
+if 'ai_summary' not in st.session_state:
+    st.session_state.ai_summary = None
+
+col_ai_btn, col_ai_clear = st.columns([1, 5])
+
+with col_ai_btn:
+    generate_clicked = st.button("✦ Generate Summary")
+
+with col_ai_clear:
+    # Show Clear button only when a summary is currently displayed
+    if st.session_state.ai_summary:
+        if st.button("Clear"):
+            st.session_state.ai_summary = None
+            st.rerun()
+
+if generate_clicked:
+    with st.spinner("Analyzing your data..."):
+        # Build the payload from real dashboard data to pass to Sarah's function.
+        # We gather: total revenue, trend, alert count, top product,
+        # top category, projected revenue, and top 3 alert product names.
+        total_sales_val  = df_filtered["sales"].sum()
+        top_product_name = top5.iloc[0]['product'] if len(top5) > 0 else "N/A"
+        top_category_name = category_sales.iloc[0]['category'] if len(category_sales) > 0 else "N/A"
+        projected_val    = sum(forecast_values) if forecast_values else None
+        top_alert_names  = alerts_df['product_name'].head(3).tolist() if not alerts_df.empty else []
+
+        result = test_gemini(
+            total_revenue    = total_sales_val,
+            trend_label      = trend_label,
+            trend_delta      = trend_delta,
+            alert_count      = len(alerts_df),
+            top_product      = top_product_name,
+            top_category     = top_category_name,
+            projected_total  = projected_val,
+            projection_option= projection_option,
+            top_alerts       = top_alert_names
+        )
+
+        if result["status"] == "success":
+            st.session_state.ai_summary = result["text"]
+        else:
+            st.session_state.ai_summary = None
+            st.markdown(f"""
+                <div style='background-color: #fce8e6; border-left: 4px solid #d93025;
+                            padding: 1rem 1.25rem; border-radius: 4px; color: #202124;
+                            margin-bottom: 1rem;'>
+                    ⚠️ Could not generate summary — {result["message"]}
+                </div>
+            """, unsafe_allow_html=True)
+
+# Display the cached AI summary if one exists
+if st.session_state.ai_summary:
+    st.markdown(f"""
+        <div style='background-color: #e8f0fe; border-left: 4px solid #1a73e8;
+                    padding: 1.25rem 1.5rem; border-radius: 4px;
+                    color: #202124; font-size: 0.9rem; line-height: 1.6;
+                    margin-bottom: 1.5rem;'>
+            {st.session_state.ai_summary}
+        </div>
+    """, unsafe_allow_html=True)
+
+# ── KPI metrics ───────────────────────────────────────────────────────────────
+# Four headline numbers answering the manager's most important questions:
+#   1. How much money are we making? (Total Revenue)
+#   2. Is the business growing or shrinking? (Sales Trend)
+#   3. Is anything broken? (Active Alerts)
+#   4. How much do we expect to make? (Projected Revenue)
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    total_sales = df_filtered["sales"].sum()
+    st.metric("Total Revenue", f"${total_sales:,.0f}", delta="All stores combined")
+
+with col2:
+    # Powered by the trend calculation above — green for up, red for down, gray for steady
+    st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
+
+with col3:
+    alert_count = len(alerts_df)
+    if alert_count == 0:
+        delta_text = "No issues detected"
+        delta_color = "off"
+    else:
+        delta_text = f"{alert_count} items need your attention"
+        delta_color = "inverse"  # inverse makes positive numbers show red (bad = more alerts)
+    st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color)
+
+    # Inject red top border on the Active Alerts card when alerts exist.
+    # Done via CSS injection since Streamlit doesn't support conditional card styling natively.
+    if alert_count > 0:
+        st.markdown("""
+            <style>
+            [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
+            [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+                border-top: 3px solid #d93025 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+with col4:
+    # Sums all forecast_values for the selected horizon — updates when
+    # the Forecast Horizon filter changes so the number matches the orange line.
+    if forecast_values:
+        projected_total = sum(forecast_values)
+        st.metric(
+            f"Projected Revenue ({projection_option})",
+            f"${projected_total:,.0f}",
+            delta="Based on forecast model"
+        )
+    else:
+        st.metric("Projected Revenue", "—", delta="No forecast available", delta_color="off")
+
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+# ── Forecast chart + Alert panel ──────────────────────────────────────────────
+# Two-column layout: chart takes 2/3 width, alert panel takes 1/3.
+
+col_chart, col_alerts = st.columns([2, 1])
+
+with col_chart:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0; 
+                    border-bottom: none; border-top: 3px solid #0f9d58;'>
+            <h3 style='margin: 0; color: #202124; font-size: 0.95rem; font-weight: 500;'>
+                Sales Forecast
+            </h3>
+            <p style='margin: 0.2rem 0 0 0; color: #5f6368; font-size: 0.8rem;'>
+                Historical performance vs. projected growth
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fig = go.Figure()
+
+    # Green solid line — actual historical sales from the uploaded/benchmark dataset
+    fig.add_trace(go.Scatter(
+        x=df_chart['period'], y=df_chart['sales'],
+        mode='lines+markers', name='Historical',
+        line=dict(color='#0f9d58', width=2.5),
+        marker=dict(size=6, color='#0f9d58'),
+        fill='tozeroy', fillcolor='rgba(15, 157, 88, 0.06)',
+        hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+    ))
+
+    # Orange dashed line — Alberto's LightGBM predictions (or fallback growth formula).
+    # Dashed style visually reinforces that this is a projection, not historical fact.
+    fig.add_trace(go.Scatter(
+        x=[last_period] + forecast_periods,
+        y=[last_value] + forecast_values,
+        mode='lines+markers', name='Projected',
+        line=dict(color='#f29900', width=2.5, dash='dash'),
+        marker=dict(size=6, color='#f29900'),
+        hovertemplate='<b>%{x}</b><br>Projected: $%{y:,.0f}<extra></extra>'
+    ))
+
+    # Vertical dotted line separating historical from projected — visual clarity for managers
+    fig.add_vline(x=last_period, line_dash="dot", line_color="#dadce0", line_width=1.5, opacity=0.8)
+
+    fig.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white', height=320,
+        margin=dict(l=60, r=20, t=16, b=50),
+        xaxis=dict(
+            showgrid=True, gridcolor='#f1f3f4',
+            title=dict(text="Month", font=dict(color='#5f6368', size=11)),
+            tickfont=dict(color='#5f6368', size=11),
+            showline=True, linecolor='#e0e0e0'
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor='#f1f3f4',
+            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+            tickfont=dict(color='#5f6368', size=11),
+            tickformat='$,.0f',
+            range=[0, max(df_chart['sales'].max(), max(forecast_values)) * 1.15]
+        ),
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
+        hovermode='x unified',
+        font=dict(color='#202124', family='Google Sans, Roboto')
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+# ── Alert panel ───────────────────────────────────────────────────────────────
+# Powered by James's alerter. Each card shows:
+#   - Direction label (Sales Increasing / Sales Decreasing)
+#   - Product name
+#   - Estimated % change from normal range (derived from James's severity score)
+# Color coding: Green = sales spike up (good), Red = sales spike down (bad)
+
+with col_alerts:
+    if alerts_df.empty:
+        # All clear state — no flags in the filtered data
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1.25rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-top: 3px solid #0f9d58; height: 100%;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em;
+                          margin: 0 0 1rem 0;'>Alert Center</p>
+                <div style='background-color: #e6f4ea; border-radius: 4px; 
+                            padding: 1.25rem; text-align: center;'>
+                    <p style='color: #0b8043; font-weight: 500; font-size: 0.9rem; margin: 0;'>All Clear</p>
+                    <p style='color: #5f6368; font-size: 0.8rem; margin: 0.25rem 0 0 0;'>No issues detected</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Header with active alert count badge
+        st.markdown(f"""
+            <div style='background-color: #ffffff; padding: 1.25rem 1.5rem 0.75rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-top: 3px solid #d93025; border-bottom: none;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em;
+                          margin: 0 0 0.5rem 0;'>Alert Center</p>
+                <span style='background: #fce8e6; color: #d93025; font-size: 0.75rem;
+                             font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 2px;'>
+                    {len(alerts_df)} Active
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        for _, alert in alerts_df.iterrows():
+            # Derive a rough % estimate from James's severity score.
+            # severity 2.0 ≈ 25% deviation, severity 3.0 ≈ 50% deviation.
+            # This gives the manager a sense of magnitude without needing
+            # to understand what "2.4 standard deviations" means.
+            severity = float(alert['severity'])
+            pct = round((severity - 1) * 25)
+
+            if alert['alert_type'] == "Sales Anomaly":
+                # Try to determine direction (up or down) from James's metric string.
+                # Format: "Sales of X is Y std devs from 90-day mean of Z"
+                # If parsing fails, guess based on severity level.
+                try:
+                    parts   = alert['metric'].split()
+                    current = float(parts[2])
+                    mean    = float(parts[-1])
+                    is_up   = current > mean
+                except:
+                    is_up = severity > 2.5
+
+                if is_up:
+                    color = "#0b8043"; bg = "#e6f4ea"
+                    label = "📈 Sales Increasing"
+                    plain_metric = f"Up ~{pct}% above normal range"
+                else:
+                    color = "#d93025"; bg = "#fce8e6"
+                    label = "📉 Sales Decreasing"
+                    plain_metric = f"Down ~{pct}% below normal range"
+
+            elif alert['alert_type'] == "Demand Decline":
+                # Fallback for older alert format James may still send
+                color = "#d93025"; bg = "#fce8e6"
+                label = "📉 Sales Decreasing"
+                plain_metric = f"Down ~{pct}% below normal range"
+
             else:
-                st.error("Unable to generate summary. Please try again.")
+                # Margin alert — only fires when profit column is present in data
+                color = "#5f6368"; bg = "#f1f3f4"
+                label = "Low Profit Margin"
+                plain_metric = "This product has been losing money for multiple periods"
 
-    
-    if st.session_state.summary:
-        st.write(st.session_state.summary)
+            st.markdown(f"""
+                <div style='background-color: {bg}; padding: 0.75rem 1rem;
+                            margin-top: 2px; border-left: 3px solid {color};'>
+                    <span style='color: {color}; font-size: 0.7rem; font-weight: 500;'>
+                        {label}
+                    </span>
+                    <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
+                        {alert['product_name']}
+                    </p>
+                    <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
+                        {plain_metric}
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+# ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
+# Side by side panels below the forecast chart.
+# Green = products to push / invest in. Red = products to investigate or cut.
+# Both update when store/category filters change so managers can drill down
+# to see top/bottom sellers for a specific store or category.
+
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+col_best, col_worst = st.columns(2)
+
+with col_best:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-top: 3px solid #0f9d58; border-bottom: none;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Top Performers
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Products driving the most revenue
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    for i, row in top5.iterrows():
+        rank = i + 1
+        st.markdown(f"""
+            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #f1f3f4;
+                        display: flex; justify-content: space-between; align-items: center;'>
+                <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                    <span style='background-color: #e6f4ea; color: #0b8043;
+                                 font-size: 0.7rem; font-weight: 600;
+                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                 display: inline-flex; align-items: center; justify-content: center;'>
+                        {rank}
+                    </span>
+                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                        {row['product']}
+                    </span>
+                </div>
+                <span style='color: #0b8043; font-size: 0.875rem; font-weight: 500;'>
+                    ${row['total_sales']:,.0f}
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # Bottom border to close the card visually
+    st.markdown("""
+        <div style='background-color: #ffffff; height: 0.75rem;
+                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                    border-bottom: 1px solid #e0e0e0;'>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col_worst:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-top: 3px solid #d93025; border-bottom: none;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Underperformers
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Products generating the least revenue
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    for i, row in bottom5.iterrows():
+        rank = i + 1
+        st.markdown(f"""
+            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #f1f3f4;
+                        display: flex; justify-content: space-between; align-items: center;'>
+                <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                    <span style='background-color: #fce8e6; color: #d93025;
+                                 font-size: 0.7rem; font-weight: 600;
+                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                 display: inline-flex; align-items: center; justify-content: center;'>
+                        {rank}
+                    </span>
+                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                        {row['product']}
+                    </span>
+                </div>
+                <span style='color: #d93025; font-size: 0.875rem; font-weight: 500;'>
+                    ${row['total_sales']:,.0f}
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div style='background-color: #ffffff; height: 0.75rem;
+                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                    border-bottom: 1px solid #e0e0e0;'>
+        </div>
+    """, unsafe_allow_html=True)
+
+# ── Category Breakdown ────────────────────────────────────────────────────────
+# Two charts side by side answering different but complementary questions:
+#   Bar chart  → "How much revenue does each category generate?" (absolute $)
+#   Donut chart → "What share of total revenue does each category represent?" (%)
+# Together they give a complete picture of category performance.
+# Both update with store/category filters.
+
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+col_bar, col_pie = st.columns(2)
+
+with col_bar:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-bottom: none; border-top: 3px solid #0f9d58;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Revenue by Category
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Total revenue generated per category
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fig_bar = go.Figure()
+    fig_bar.add_trace(go.Bar(
+        x=category_sales['category'],
+        y=category_sales['total_sales'],
+        marker_color=category_colors[:len(category_sales)],
+        # Labels shown on/above each bar so small bars are still readable
+        text=[f"${v:,.0f}" for v in category_sales['total_sales']],
+        textposition='auto',   # Plotly decides inside vs outside per bar
+        cliponaxis=False,      # Prevents labels from being cut off at chart edge
+        textfont=dict(size=10, color='#202124'),
+        hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+    ))
+
+    fig_bar.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        height=360, margin=dict(l=60, r=20, t=16, b=50),
+        xaxis=dict(
+            showgrid=False,
+            tickfont=dict(color='#5f6368', size=11),
+            showline=True, linecolor='#e0e0e0'
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor='#f1f3f4',
+            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+            tickfont=dict(color='#5f6368', size=11),
+            tickformat='$,.0f',
+            # 25% headroom above tallest bar so outside labels are never clipped
+            range=[0, category_sales['total_sales'].max() * 1.25]
+        ),
+        showlegend=False,
+        font=dict(color='#202124', family='Google Sans, Roboto')
+    )
+
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+with col_pie:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-bottom: none; border-top: 3px solid #1a73e8;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Revenue Share
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Each category as a % of total revenue
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fig_pie = go.Figure()
+    fig_pie.add_trace(go.Pie(
+        labels=category_sales['category'],
+        values=category_sales['total_sales'],
+        marker=dict(colors=category_colors[:len(category_sales)]),
+        hole=0.4,  # Donut style — cleaner and more modern than a full pie
+        hovertemplate='<b>%{label}</b><br>Revenue: $%{value:,.0f}<br>Share: %{percent}<extra></extra>'
+    ))
+
+    fig_pie.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        height=360, margin=dict(l=20, r=20, t=16, b=50),
+        legend=dict(
+            orientation="h", yanchor="top", y=-0.15,
+            xanchor="center", x=0.5,
+            font=dict(color='#5f6368', size=10)
+        ),
+        font=dict(color='#202124', family='Google Sans, Roboto')
+    )
+
+    st.plotly_chart(fig_pie, use_container_width=True)

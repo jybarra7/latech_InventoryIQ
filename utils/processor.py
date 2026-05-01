@@ -2,6 +2,39 @@ import pandas as pd
 
 from utils.schema import OPTIONAL_COLUMNS, SCHEMA
 
+def map_to_clean_schema(raw_data: pd.DataFrame) -> pd.DataFrame:
+    """Convert raw CSV columns into the approved retail_clean.csv schema.
+    Called by app.py when an uploaded file uses non-standard column names."""
+    return load_and_clean_data(raw_data)
+
+
+def get_feature_flags(raw_data: pd.DataFrame) -> dict:
+    """Return plain-English messages for features that depend on optional fields.
+    Called by app.py to enable/disable features based on available columns."""
+    feature_flags = {}
+
+    if "profit" in raw_data.columns:
+        feature_flags["profit"] = "Profit data found: margin alerts can be active."
+    else:
+        feature_flags["profit"] = "Profit data missing: margin alerts should be inactive."
+
+    if "region" in raw_data.columns:
+        feature_flags["region"] = "Region data found: region filters can be active."
+    else:
+        feature_flags["region"] = "Region data missing: region filters should be inactive."
+
+    if "transaction_count" in raw_data.columns:
+        feature_flags["transaction_count"] = "Transaction count found: transaction metrics can be active."
+    else:
+        feature_flags["transaction_count"] = "Transaction count missing: transaction metrics should be inactive."
+
+    return feature_flags
+
+
+def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Maps raw dataset into retail_clean schema + derived features.
+    """
 
 SOURCE_MAPPINGS = {
     # Kaggle format: has store and item IDs already.
