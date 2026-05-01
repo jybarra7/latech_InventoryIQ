@@ -454,6 +454,8 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 if uploaded_file is not None:
+    # Andrew Garcia Leopold: show the uploaded file type in the custom file chip.
+    # This helps users see whether they uploaded a CSV or Excel file.
     file_badge = "XLSX" if uploaded_file.name.lower().endswith(".xlsx") else "CSV"
     st.markdown(f"""
         <style>
@@ -464,10 +466,11 @@ if uploaded_file is not None:
     """, unsafe_allow_html=True)
 
 def read_uploaded_data(file):
-    """Andrew: read either a CSV or Excel upload into a DataFrame."""
+    """Andrew Garcia Leopold: read either a CSV or Excel upload into a DataFrame."""
     file_name = file.name.lower()
 
-    # Andrew: Excel files and CSV files need different pandas functions.
+    # Andrew Garcia Leopold: Excel files and CSV files need different pandas functions.
+    # Keeping this in one helper lets the rest of the app load both formats the same way.
     if file_name.endswith(".xlsx"):
         return pd.read_excel(file)
 
@@ -604,8 +607,9 @@ st.sidebar.markdown("""
     </p>
 """, unsafe_allow_html=True)
 
-# Andrew: Required fields are the columns the dashboard needs to work.
+# Andrew Garcia Leopold: Required fields are the columns the dashboard needs to work.
 # Optional features are extra columns that turn extra dashboard features on/off.
+# Green means the field is available. Red means the related feature should stay inactive.
 green_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#0f9d58; margin-right:0.35rem;'></span>"
 red_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#d93025; margin-right:0.35rem;'></span>"
 
@@ -871,8 +875,8 @@ category_sales = (
     .sort_values('total_sales', ascending=False)
 )
 
-# Andrew: Store comparison adds up total sales for each store.
-# This uses the filtered data, so it changes when filters change.
+# Andrew Garcia Leopold: Store comparison adds up total sales for each store.
+# This uses df_filtered, so it changes when the user changes store/category filters.
 store_sales = (
     df_filtered.groupby('store_id')['sales']
     .sum()
@@ -1412,8 +1416,9 @@ with col_pie:
 
     st.plotly_chart(fig_pie, use_container_width=True)
 
-# Andrew: Store Breakdown / Store Comparison.
+# Andrew Garcia Leopold: Store Breakdown / Store Comparison.
 # This shows stores side by side using total sales from the filtered data.
+# It supports the Segment Analysis task by making store performance easy to compare.
 st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
 
 st.markdown("""
