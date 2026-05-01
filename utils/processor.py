@@ -3,13 +3,13 @@ import pandas as pd
 from utils.schema import OPTIONAL_COLUMNS, SCHEMA
 
 def map_to_clean_schema(raw_data: pd.DataFrame) -> pd.DataFrame:
-    """Convert raw CSV columns into the approved retail_clean.csv schema.
+    """Andrew Garcia Leopold: convert raw data into the approved retail_clean.csv schema.
     Called by app.py when an uploaded file uses non-standard column names."""
     return load_and_clean_data(raw_data)
 
 
 def get_feature_flags(raw_data: pd.DataFrame) -> dict:
-    """Return plain-English messages for features that depend on optional fields.
+    """Andrew Garcia Leopold: return messages for optional fields.
     Called by app.py to enable/disable features based on available columns."""
     feature_flags = {}
 
@@ -37,6 +37,14 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
 
 SOURCE_MAPPINGS = {
+    # Andrew Garcia Leopold: clean format already uses the shared project column names.
+    # This lets exported retail_clean.csv files reload without being rejected.
+    "retail_clean": {
+        "required_columns": {"date", "store_id", "product_id", "sales"},
+        "rename_columns": {},
+        "defaults": {"category": "Uncategorized"},
+        "id_fields": {},
+    },
     # Kaggle format: has store and item IDs already.
     "store_item_demand": {
         "required_columns": {"date", "store", "item", "sales"},
