@@ -9,6 +9,7 @@ venv/
 
 # Data files
 data/*.csv
+data/*.xlsx
 
 # OS
 .DS_Store
