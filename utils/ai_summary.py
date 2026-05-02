@@ -1,32 +1,23 @@
-import os
-from dotenv import load_dotenv
-from google import genai
-
-# Load .env
-load_dotenv()
-
-# Get API key
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+from utils.trend import compute_trend
 
 
-def test_gemini():
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Give me a one sentence summary of retail sales trends."
-        )
+def build_ai_payload(df):
+    """
+    Build structured payload for AI consumption.
+    """
 
-        return {
-            "status": "success",
-            "text": response.text
-        }
+    if df.empty:
+        return {"error": "No data available"}
 
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    trend = compute_trend(df)
 
+    payload = {
+        "trend": trend,
+        "latest_sales": float(df["sales"].iloc[-1]),
+        "avg_sales": float(df["sales"].mean()),
+        "max_sales": float(df["sales"].max()),
+        "min_sales": float(df["sales"].min()),
+        "data_points": len(df)
+    }
 
-# Test run
-print(test_gemini())
+    return payload
