@@ -57,16 +57,21 @@ Sales trend: {payload['trend']}
 Top alerts:
 {payload['top_alerts']}
 
-Write a short, professional business summary (3-4 sentences) explaining:
-- what is happening
-- why it matters
-- what action to take
+If data is limited:
+- Do NOT mention system issues or missing pipelines
+- Do NOT use vague or corporate language
+- Provide a simple, practical summary based on what is available
 
-Use a neutral, factual tone.
-Avoid dramatic or urgent language (e.g., "critical", "urgent", "immediate action").
-Keep sentences concise and clear.
+Write a short, clear business summary (2-3 sentences):
+- describe the current sales trend (or lack of clear trend)
+- mention whether alerts are present or not
+- suggest a simple next step (e.g., monitor, review, adjust)
+
+Use plain, direct language suitable for a store manager.
+Use natural, smooth phrasing (avoid awkward phrases like "data is still developing" or "let’s").
+Avoid buzzwords and overly formal phrasing.
 Do not repeat raw numbers.
-"""
+    """
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",

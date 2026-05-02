@@ -38,7 +38,7 @@ from alerter import run_all_alerts  # James's alert engine
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "utils"))
 from processor import map_to_clean_schema, get_feature_flags  # Andrew's processor
-from ai_summary import test_gemini  # Sarah's Gemini integration
+from ai_summary import build_payload, generate_summary # Sarah's Gemini integration
 
 # ── Page configuration ───────────────────────────────────────────────────────
 # Must be the first Streamlit call in the file — sets browser tab title
@@ -938,17 +938,32 @@ if generate_clicked:
         projected_val    = sum(forecast_values) if forecast_values else None
         top_alert_names  = alerts_df['product_name'].head(3).tolist() if not alerts_df.empty else []
 
-        result = test_gemini(
-            total_revenue    = total_sales_val,
-            trend_label      = trend_label,
-            trend_delta      = trend_delta,
-            alert_count      = len(alerts_df),
-            top_product      = top_product_name,
-            top_category     = top_category_name,
-            projected_total  = projected_val,
-            projection_option= projection_option,
-            top_alerts       = top_alert_names
+        # OLD TEST FUNCTION (kept for reference, no longer used)
+        # result = test_gemini(
+        #     total_revenue    = total_sales_val,
+        #     trend_label      = trend_label,
+        #     trend_delta      = trend_delta,
+        #     alert_count      = len(alerts_df),
+        #     top_product      = top_product_name,
+        #     top_category     = top_category_name,
+        #     projected_total  = projected_val,
+        #     projection_option= projection_option,
+        #     top_alerts       = top_alert_names
+        # )
+
+        # Fix column name mismatch (important)
+        alerts_df = alerts_df.rename(columns={"product_name": "product"})
+
+        # Build payload for Gemini (new structured approach)
+        payload = build_payload(
+            trend=trend_label,
+            model_name=method_used if method_used else "Unknown Model",
+            accuracy=mae if mae else "not available",
+            alerts_df=alerts_df
         )
+
+        # Generate summary using Gemini
+        result = generate_summary(payload)
 
         if result["status"] == "success":
             st.session_state.ai_summary = result["text"]
@@ -961,7 +976,6 @@ if generate_clicked:
                     ⚠️ Could not generate summary — {result["message"]}
                 </div>
             """, unsafe_allow_html=True)
-
 # Display the cached AI summary if one exists
 if st.session_state.ai_summary:
     st.markdown(f"""
