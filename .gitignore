@@ -8,8 +8,9 @@ venv/
 .venv/
 
 # Data files
-data/*.csv
-data/*.xlsx
+*.csv
+*.xlsx
+!data/retail_clean.csv
 
 # OS
 .DS_Store
