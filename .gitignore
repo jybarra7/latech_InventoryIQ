@@ -7,7 +7,7 @@ __pycache__/
 venv/
 .venv/
 
-# Data files (ignore CSVs but keep the folder)
+# Data files
 *.csv
 *.xlsx
 !data/retail_clean.csv
@@ -19,3 +19,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Ignore local test files
+utils/test_*.py
