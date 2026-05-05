@@ -20,7 +20,6 @@ Run with: streamlit run app.py
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import timedelta
@@ -936,7 +935,14 @@ if generate_clicked:
         top_product_name = top5.iloc[0]['product'] if len(top5) > 0 else "N/A"
         top_category_name = category_sales.iloc[0]['category'] if len(category_sales) > 0 else "N/A"
         projected_val    = sum(forecast_values) if forecast_values else None
-        top_alert_names  = alerts_df['product_name'].head(3).tolist() if not alerts_df.empty else []
+        # Andrew Garcia Leopold: support either alert column name so AI testing
+        # does not break the dashboard if another teammate uses "product".
+        alert_product_column = (
+            "product_name" if "product_name" in alerts_df.columns
+            else "product" if "product" in alerts_df.columns
+            else None
+        )
+        top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
 
         # OLD TEST FUNCTION (kept for reference, no longer used)
         # result = test_gemini(
@@ -951,15 +957,16 @@ if generate_clicked:
         #     top_alerts       = top_alert_names
         # )
 
-        # Fix column name mismatch (important)
-        alerts_df = alerts_df.rename(columns={"product_name": "product"})
+        # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
+        # The Alert Center below still needs the original product_name column.
+        ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
 
         # Build payload for Gemini (new structured approach)
         payload = build_payload(
             trend=trend_label,
             model_name=method_used if method_used else "Unknown Model",
             accuracy=mae if mae else "not available",
-            alerts_df=alerts_df
+            alerts_df=ai_alerts_df
         )
 
         # Generate summary using Gemini
@@ -1107,7 +1114,7 @@ with col_chart:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ── Alert panel ───────────────────────────────────────────────────────────────
 # Powered by James's alerter. Each card shows:
@@ -1169,6 +1176,10 @@ with col_alerts:
                 label = "⚠️ Low Profit Margin"
                 plain_metric = "This product has been losing money for multiple periods"
 
+            # Andrew Garcia Leopold: show the product name even if the alert data
+            # arrives as "product" instead of "product_name".
+            alert_product_name = alert.get("product_name", alert.get("product", "Unknown product"))
+
             alert_cards_html += dedent(f"""
             <div style='background-color: {bg}; padding: 0.75rem 1rem;
                         margin-top: 2px; border-left: 3px solid {color};'>
@@ -1176,7 +1187,7 @@ with col_alerts:
                     {html.escape(label)}
                 </span>
                 <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
-                    {html.escape(str(alert['product_name']))}
+                    {html.escape(str(alert_product_name))}
                 </p>
                 <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
                     {html.escape(plain_metric)}
@@ -1184,11 +1195,11 @@ with col_alerts:
             </div>
             """)
 
-        components.html(dedent(f"""
+        # Andrew Garcia Leopold: use st.html instead of the deprecated components.html.
+        # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
+        st.html(dedent(f"""
             <style>
-                body {{
-                    margin: 0;
-                    background: transparent;
+                .alert-toggle {{
                     font-family: "Google Sans", Roboto, sans-serif;
                 }}
                 details.alert-toggle > summary {{
@@ -1223,11 +1234,12 @@ with col_alerts:
                     </div>
                 </summary>
                 <div style='border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                            border-bottom: 1px solid #e0e0e0;'>
+                            border-bottom: 1px solid #e0e0e0; max-height: 280px;
+                            overflow-y: auto;'>
                     {alert_cards_html}
                 </div>
             </details>
-        """).strip(), height=360, scrolling=True)
+        """).strip(), width="stretch")
 
 # ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
 # Side by side panels below the forecast chart.
@@ -1391,7 +1403,7 @@ with col_bar:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, width="stretch")
 
 with col_pie:
     st.markdown("""
@@ -1428,7 +1440,7 @@ with col_pie:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, width="stretch")
 
 # Andrew Garcia Leopold: Store Breakdown / Store Comparison.
 # This shows stores side by side using total sales from the filtered data.
@@ -1480,4 +1492,4 @@ fig_store.update_layout(
     font=dict(color='#202124', family='Google Sans, Roboto')
 )
 
-st.plotly_chart(fig_store, use_container_width=True)
+st.plotly_chart(fig_store, width="stretch")
