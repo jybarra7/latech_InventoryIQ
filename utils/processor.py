@@ -4,6 +4,16 @@ from utils.schema import OPTIONAL_COLUMNS, SCHEMA
 
 
 # -------------------------
+# APP COMPATIBILITY WRAPPER
+# -------------------------
+def map_to_clean_schema(raw_data: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: normalize an uploaded dataset into the shared clean schema."""
+    # app.py calls this helper when a user uploads a file with non-standard column names.
+    # The full cleaning work still happens in load_and_clean_data() below.
+    return load_and_clean_data(raw_data)
+
+
+# -------------------------
 # FEATURE FLAGS
 # -------------------------
 def get_feature_flags(raw_data: pd.DataFrame) -> dict:
