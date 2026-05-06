@@ -21,7 +21,7 @@ CLEAN_CSV_PATH = PROJECT_ROOT / "data" / "retail_clean.csv"
 ALERTS_CSV_PATH = PROJECT_ROOT / "data" / "alerts.csv"
 
 
-def detect_anomalies(df: pd.DataFrame, threshold: float = 1.0) -> pd.DataFrame:
+def detect_anomalies(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
     """
     Flags products whose most recent daily sales deviate more than
     threshold standard deviations from their trailing 90-day mean.
@@ -205,9 +205,6 @@ def run_all_alerts(df: pd.DataFrame, thresholds: dict = {}) -> pd.DataFrame:
         combined = pd.concat([anomalies, declines, margins], ignore_index=True)
 
     combined = combined.sort_values("severity", ascending=False).reset_index(drop=True) if not combined.empty else combined
-    combined.to_csv(ALERTS_CSV_PATH, index=False)
-
-    print(f"Exported {len(combined)} alerts to {ALERTS_CSV_PATH}")
 
     return combined
 
