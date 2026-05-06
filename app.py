@@ -1,3 +1,24 @@
+"""
+app.py — Retail Forecasting Dashboard (Main Entry Point)
+---------------------------------------------------------
+Owned by: Justin (Integration Lead)
+Purpose:  The single Streamlit app file that wires together every team
+          member's output into one cohesive dashboard. This file:
+            - Loads and normalizes retail sales data (Andrew's processor)
+            - Loads Alberto's LightGBM forecast predictions
+            - Runs James's alert engine on the filtered dataset
+            - Renders all charts, KPIs, and panels
+            - Calls Sarah's Gemini AI summary with real dashboard data
+
+Team modules consumed:
+    models/alerter.py     → James  — anomaly + demand decline detection
+    utils/processor.py    → Andrew — CSV normalization + feature flags
+    utils/ai_summary.py   → Sarah  — Gemini AI summary generation
+    data/forecastUpdated.csv → Alberto — LightGBM predictions for 2018
+
+Run with: streamlit run app.py
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
