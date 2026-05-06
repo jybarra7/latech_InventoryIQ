@@ -407,6 +407,21 @@ st.markdown("""
         background-color: #e6f4ea !important;
         border-color: #0f9d58 !important;
     }
+            
+    /* Force entire spinner container and all children to be dark */
+    [data-testid="stSpinner"],
+    [data-testid="stSpinner"] *,
+    [data-testid="stSpinner"] p,
+    [data-testid="stSpinner"] span,
+    [data-testid="stSpinner"] div,
+    [data-testid="stSpinner"] svg,
+    [data-testid="stSpinner"] svg *,
+    [data-testid="stSpinner"] svg path,
+    [data-testid="stSpinner"] svg circle {
+        color: #202124 !important;
+        fill: #202124 !important;
+        stroke: #202124 !important;
+    }
 
     /* Dropdown menus — force white background so options are readable */
     [data-baseweb="popover"] ul { background-color: #ffffff !important; }
@@ -593,6 +608,40 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
+
+# ── Intro panel ───────────────────────────────────────────────────────────────
+# FR-35: Brief introductory panel for first-time viewers.
+# Cached in session state so it only shows once and dismisses cleanly.
+
+if 'show_intro' not in st.session_state:
+    st.session_state.show_intro = True
+
+if st.session_state.show_intro:
+    st.markdown("""
+        <div style='background-color: #e8f0fe; padding: 1.25rem 1.5rem;
+                    border-radius: 0; border: 1px solid #c5d8f6;
+                    border-left: 4px solid #1a73e8; margin-bottom: 1.5rem;'>
+            <p style='color: #1a73e8; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem 0;'>
+                Welcome to the Retail Forecasting Engine
+            </p>
+            <p style='color: #202124; font-size: 0.875rem; margin: 0 0 0.75rem 0;'>
+                This dashboard ingests your retail sales data and automatically generates
+                demand forecasts, flags at-risk products, and produces plain-English AI summaries
+                — no technical knowledge required.
+            </p>
+            <p style='color: #3c4043; font-size: 0.8rem; margin: 0;'>
+                <b>How to navigate:</b> Use the sidebar to upload your data, filter by store or category,
+                and adjust alert sensitivity. Click <b>✦ Generate Summary</b> for an AI-written overview
+                of what needs your attention.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Got it, dismiss"):
+        st.session_state.show_intro = False
+        st.rerun()
+
 # ── Data mapping panel ───────────────────────────────────────────────────────
 # Shows the manager which fields were detected in their uploaded data.
 # Green dot = field found and active. Red dot = field missing, feature disabled.
@@ -694,6 +743,7 @@ selected_categories = st.sidebar.multiselect(
 # to re-render as brand new widgets with their default values
 if st.sidebar.button("Reset Filters"):
     st.session_state.reset_counter += 1
+    st.session_state.ai_summary = None  # Clear stale summary when filters reset
     st.rerun()
 
 # Alert sensitivity slider — wired directly to James's alerter thresholds.
@@ -914,17 +964,14 @@ st.markdown("""
 if 'ai_summary' not in st.session_state:
     st.session_state.ai_summary = None
 
-col_ai_btn, col_ai_clear = st.columns([1, 5])
+col_ai_btn = st.columns([1, 5])[0]
 
 with col_ai_btn:
     generate_clicked = st.button("✦ Generate Summary")
 
-with col_ai_clear:
-    # Show Clear button only when a summary is currently displayed
-    if st.session_state.ai_summary:
-        if st.button("Clear"):
-            st.session_state.ai_summary = None
-            st.rerun()
+# Deleted the Clear button to simplify the interface. Also 
+# It is not longer needed st.session_state.ai_summary is set to None 
+# when filter resets since it does not show up anymore.
 
 if generate_clicked:
     with st.spinner("Analyzing your data..."):
@@ -1107,7 +1154,7 @@ with col_chart:
             title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
             tickfont=dict(color='#5f6368', size=11),
             tickformat='$,.0f',
-            range=[0, max(df_chart['sales'].max(), max(forecast_values)) * 1.15]
+            range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15] # Max(forecase_value) crashes on empty list bug fixed
         ),
         legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
         hovermode='x unified',
