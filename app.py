@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import timedelta
+import html
+from textwrap import dedent
 import sys
 import os
 
@@ -14,7 +16,7 @@ from alerter import run_all_alerts  # James's alert engine
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "utils"))
 from processor import map_to_clean_schema, get_feature_flags  # Andrew's processor
-from ai_summary import test_gemini  # Sarah's Gemini integration
+from ai_summary import build_payload, generate_summary # Sarah's Gemini integration
 
 # ── Page configuration ───────────────────────────────────────────────────────
 # Must be the first Streamlit call in the file — sets browser tab title
@@ -136,8 +138,7 @@ st.markdown("""
         letter-spacing: 0.02em !important;
     }
 
-    /* File uploader — the ::after trick fixes Streamlit's double-text bug
-       where the button label renders twice due to a known Streamlit issue */
+    /* File uploader: keep the older clean white upload box look. */
     [data-testid="stFileUploader"] section {
         background-color: #ffffff !important;
         border: 1px solid #dadce0 !important;
@@ -145,6 +146,7 @@ st.markdown("""
         padding: 0.75rem !important;
     }
 
+    /* Make the add/upload control look like a real button. */
     [data-testid="stFileUploader"] section button {
         background-color: #ffffff !important;
         color: #0f9d58 !important;
@@ -152,19 +154,23 @@ st.markdown("""
         border: 1px solid #dadce0 !important;
         border-radius: 4px !important;
         width: 100% !important;
+        min-height: 2.25rem !important;
+        font-size: 0.8rem !important;
         overflow: hidden !important;
-        text-indent: -9999px !important;
         position: relative !important;
+        text-indent: -9999px !important;
     }
 
     [data-testid="stFileUploader"] section button::after {
-        content: "Choose File" !important;
+        content: "Add file" !important;
         text-indent: 0 !important;
         position: absolute !important;
         left: 50% !important;
-        transform: translateX(-50%) !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
         color: #0f9d58 !important;
         font-size: 0.8rem !important;
+        font-weight: 500 !important;
     }
 
     [data-testid="stFileUploader"] small,
@@ -174,6 +180,137 @@ st.markdown("""
         color: #80868b !important;
         font-size: 0.75rem !important;
     }
+
+    /* Uploaded file chip: keep the dark pill, but make text readable. */
+    [data-testid="stFileUploader"] [class*="stFileChip"],
+    [data-testid="stFileUploader"] [class*="stFileChip"] * {
+        color: #ffffff !important;
+    }
+
+    /* File icon should be black inside its light icon box. */
+    [data-testid="stFileUploader"] [class*="stFileChip"] svg,
+    [data-testid="stFileUploader"] [class*="stFileChip"] svg * {
+        color: #111827 !important;
+        fill: #111827 !important;
+        stroke: #111827 !important;
+    }
+
+    /* The remove button should stay small and normal inside the file chip. */
+    [data-testid="stFileUploader"] [class*="stFileChip"] button {
+        background: transparent !important;
+        border: none !important;
+        width: auto !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        text-indent: 0 !important;
+        position: static !important;
+        color: #ffffff !important;
+        display: inline-flex !important;
+        overflow: visible !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] button::after {
+        content: none !important;
+    }
+
+    /* Strong fallback for Streamlit's uploaded-file chip markup. */
+    [data-testid="stFileUploader"] small button {
+        background-color: #f8fafc !important;
+        border: none !important;
+        border-radius: 999px !important;
+        color: #111827 !important;
+        width: 1.1rem !important;
+        height: 1.1rem !important;
+        min-height: 1.1rem !important;
+        padding: 0 !important;
+        text-indent: 0 !important;
+        position: static !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: visible !important;
+    }
+
+    [data-testid="stFileUploader"] small button::after {
+        content: none !important;
+    }
+
+    [data-testid="stFileUploader"] small button svg,
+    [data-testid="stFileUploader"] small button svg *,
+    [data-testid="stFileUploader"] section svg,
+    [data-testid="stFileUploader"] section svg * {
+        color: #111827 !important;
+        fill: #111827 !important;
+        stroke: #111827 !important;
+    }
+
+    /* Final file-chip cleanup: visible file icon and visible X button. */
+    [data-testid="stFileUploader"] [class*="stFileChip"] > div:first-child {
+        background-color: #f8fafc !important;
+        border-radius: 6px !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] > div:first-child svg,
+    [data-testid="stFileUploader"] [class*="stFileChip"] > div:first-child svg * {
+        display: none !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] > div:first-child::after {
+        content: "CSV" !important;
+        width: 1.35rem !important;
+        height: 1.05rem !important;
+        background-color: #e0f2fe !important;
+        border: 1px solid #64748b !important;
+        border-radius: 3px !important;
+        color: #334155 !important;
+        font-size: 0.45rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.02em !important;
+        position: absolute !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] small button {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: #ffffff !important;
+        width: 1rem !important;
+        height: 1rem !important;
+        min-height: 1rem !important;
+        padding: 0 !important;
+        text-indent: 0 !important;
+        position: static !important;
+        overflow: visible !important;
+        font-size: 0 !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] small button *,
+    [data-testid="stFileUploader"] [class*="stFileChip"] small button svg {
+        display: none !important;
+        background: transparent !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] small button::before {
+        content: "X" !important;
+        color: #ffffff !important;
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+    }
+
+    [data-testid="stFileUploader"] [class*="stFileChip"] small button::after {
+        content: none !important;
+    }
+
+
 
     h1, h2, h3 {
         background-color: transparent !important;
@@ -288,18 +425,41 @@ st.sidebar.markdown("""
 """, unsafe_allow_html=True)
 
 uploaded_file = st.sidebar.file_uploader(
-    "Upload CSV",
-    type=["csv"],
+    "Upload CSV or Excel",
+    type=["csv", "xlsx"],
     label_visibility="collapsed",
     key="main_uploader"
 )
+
+if uploaded_file is not None:
+    # Andrew Garcia Leopold: show the uploaded file type in the custom file chip.
+    # This helps users see whether they uploaded a CSV or Excel file.
+    file_badge = "XLSX" if uploaded_file.name.lower().endswith(".xlsx") else "CSV"
+    st.markdown(f"""
+        <style>
+        [data-testid="stFileUploader"] [class*="stFileChip"] > div:first-child::after {{
+            content: "{file_badge}" !important;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+def read_uploaded_data(file):
+    """Andrew Garcia Leopold: read either a CSV or Excel upload into a DataFrame."""
+    file_name = file.name.lower()
+
+    # Andrew Garcia Leopold: Excel files and CSV files need different pandas functions.
+    # Keeping this in one helper lets the rest of the app load both formats the same way.
+    if file_name.endswith(".xlsx"):
+        return pd.read_excel(file)
+
+    return pd.read_csv(file)
 
 # Peek at the uploaded file to determine its type before loading.
 # We read the first few rows, check the column names, then reset the
 # file pointer so it can be fully read again below.
 uploaded_forecast = None
 if uploaded_file is not None:
-    peek_df = pd.read_csv(uploaded_file)
+    peek_df = read_uploaded_data(uploaded_file)
     uploaded_file.seek(0)
     if 'actual' in peek_df.columns and 'prediction' in peek_df.columns:
         # This is Alberto's forecast file — route to forecast loader
@@ -325,7 +485,7 @@ def load_data(file=None):
         data_source (str): Label shown in the page subtitle
     """
     if file is not None:
-        raw_df = pd.read_csv(file)
+        raw_df = read_uploaded_data(file)
         if 'store_id' not in raw_df.columns:
             # Non-standard schema — run through Andrew's normalizer
             df = map_to_clean_schema(raw_df)
@@ -364,7 +524,7 @@ def load_forecasts(file=None):
           because these sales haven't happened yet — only prediction is filled.
     """
     if file is not None:
-        df_f = pd.read_csv(file)
+        df_f = read_uploaded_data(file)
         df_f['date'] = pd.to_datetime(df_f['date'])
         return df_f
     forecast_path = os.path.join(os.path.dirname(__file__), "data", "forecastUpdated.csv")
@@ -425,24 +585,39 @@ st.sidebar.markdown("""
     </p>
 """, unsafe_allow_html=True)
 
-date_dot     = "🟢" if "date"       in df.columns else "🔴"
-sales_dot    = "🟢" if "sales"      in df.columns else "🔴"
-store_dot    = "🟢" if "store_id"   in df.columns else "🔴"
-product_dot  = "🟢" if "product_id" in df.columns else "🔴"
-category_dot = "🟢" if "category"   in df.columns else "🔴"
-quantity_dot = "🟢" if "quantity"   in df.columns else "🔴"
+# Andrew Garcia Leopold: Required fields are the columns the dashboard needs to work.
+# Optional features are extra columns that turn extra dashboard features on/off.
+# Green means the field is available. Red means the related feature should stay inactive.
+green_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#0f9d58; margin-right:0.35rem;'></span>"
+red_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#d93025; margin-right:0.35rem;'></span>"
+
+date_dot = green_dot if "date" in df.columns else red_dot
+sales_dot = green_dot if "sales" in df.columns else red_dot
+store_dot = green_dot if "store_id" in df.columns else red_dot
+product_dot = green_dot if "product_id" in df.columns else red_dot
+category_dot = green_dot if "category" in df.columns else red_dot
+quantity_dot = green_dot if "quantity" in df.columns else red_dot
+profit_dot = green_dot if "profit" in df.columns else red_dot
+region_dot = green_dot if "region" in df.columns else red_dot
+transaction_dot = green_dot if "transaction_count" in df.columns else red_dot
 
 st.sidebar.markdown(f"""
-    <div style='background-color: #f8f9fa; padding: 0.75rem 1rem; 
+    <div style='background-color: #f8f9fa; padding: 0.75rem 1rem;
                 border-radius: 4px; border: 1px solid #e0e0e0; line-height: 2;'>
+        <span style='font-size: 0.72rem; color: #5f6368; font-weight: 500;'>Required Fields</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{date_dot} Date</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{sales_dot} Sales</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{store_dot} Store ID</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{product_dot} Product</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{category_dot} Category</span><br>
-        <span style='font-size: 0.8rem; color: #3c4043;'>{quantity_dot} Quantity</span>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{quantity_dot} Quantity</span><br>
+        <span style='font-size: 0.72rem; color: #5f6368; font-weight: 500;'>Optional Features</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{profit_dot} {feature_flags["profit"]}</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{region_dot} {feature_flags["region"]}</span><br>
+        <span style='font-size: 0.8rem; color: #3c4043;'>{transaction_dot} {feature_flags["transaction_count"]}</span>
     </div>
 """, unsafe_allow_html=True)
+
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 # All filter widgets are keyed to reset_counter so that clicking Reset Filters
@@ -678,6 +853,15 @@ category_sales = (
     .sort_values('total_sales', ascending=False)
 )
 
+# Andrew Garcia Leopold: Store comparison adds up total sales for each store.
+# This uses df_filtered, so it changes when the user changes store/category filters.
+store_sales = (
+    df_filtered.groupby('store_id')['sales']
+    .sum()
+    .reset_index()
+    .rename(columns={'sales': 'total_sales'})
+    .sort_values('total_sales', ascending=False)
+)
 # Distinct color palette for up to 8 categories — professional and accessible
 category_colors = [
     '#0f9d58', '#1a73e8', '#f29900', '#d93025',
@@ -730,19 +914,42 @@ if generate_clicked:
         top_product_name = top5.iloc[0]['product'] if len(top5) > 0 else "N/A"
         top_category_name = category_sales.iloc[0]['category'] if len(category_sales) > 0 else "N/A"
         projected_val    = sum(forecast_values) if forecast_values else None
-        top_alert_names  = alerts_df['product_name'].head(3).tolist() if not alerts_df.empty else []
-
-        result = test_gemini(
-            total_revenue    = total_sales_val,
-            trend_label      = trend_label,
-            trend_delta      = trend_delta,
-            alert_count      = len(alerts_df),
-            top_product      = top_product_name,
-            top_category     = top_category_name,
-            projected_total  = projected_val,
-            projection_option= projection_option,
-            top_alerts       = top_alert_names
+        # Andrew Garcia Leopold: support either alert column name so AI testing
+        # does not break the dashboard if another teammate uses "product".
+        alert_product_column = (
+            "product_name" if "product_name" in alerts_df.columns
+            else "product" if "product" in alerts_df.columns
+            else None
         )
+        top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
+
+        # OLD TEST FUNCTION (kept for reference, no longer used)
+        # result = test_gemini(
+        #     total_revenue    = total_sales_val,
+        #     trend_label      = trend_label,
+        #     trend_delta      = trend_delta,
+        #     alert_count      = len(alerts_df),
+        #     top_product      = top_product_name,
+        #     top_category     = top_category_name,
+        #     projected_total  = projected_val,
+        #     projection_option= projection_option,
+        #     top_alerts       = top_alert_names
+        # )
+
+        # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
+        # The Alert Center below still needs the original product_name column.
+        ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
+
+        # Build payload for Gemini (new structured approach)
+        payload = build_payload(
+            trend=trend_label,
+            model_name=method_used if method_used else "Unknown Model",
+            accuracy=mae if mae else "not available",
+            alerts_df=ai_alerts_df
+        )
+
+        # Generate summary using Gemini
+        result = generate_summary(payload)
 
         if result["status"] == "success":
             st.session_state.ai_summary = result["text"]
@@ -755,7 +962,6 @@ if generate_clicked:
                     ⚠️ Could not generate summary — {result["message"]}
                 </div>
             """, unsafe_allow_html=True)
-
 # Display the cached AI summary if one exists
 if st.session_state.ai_summary:
     st.markdown(f"""
@@ -887,7 +1093,7 @@ with col_chart:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ── Alert panel ───────────────────────────────────────────────────────────────
 # Powered by James's alerter. Each card shows:
@@ -898,7 +1104,7 @@ with col_chart:
 
 with col_alerts:
     if alerts_df.empty:
-        # All clear state — no flags in the filtered data
+        # All clear state: no flags in the filtered data.
         st.markdown("""
             <div style='background-color: #ffffff; padding: 1.25rem 1.5rem;
                         border-radius: 0; border: 1px solid #e0e0e0;
@@ -906,7 +1112,7 @@ with col_alerts:
                 <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
                           text-transform: uppercase; letter-spacing: 0.05em;
                           margin: 0 0 1rem 0;'>Alert Center</p>
-                <div style='background-color: #e6f4ea; border-radius: 4px; 
+                <div style='background-color: #e6f4ea; border-radius: 4px;
                             padding: 1.25rem; text-align: center;'>
                     <p style='color: #0b8043; font-weight: 500; font-size: 0.9rem; margin: 0;'>All Clear</p>
                     <p style='color: #5f6368; font-size: 0.8rem; margin: 0.25rem 0 0 0;'>No issues detected</p>
@@ -914,38 +1120,19 @@ with col_alerts:
             </div>
         """, unsafe_allow_html=True)
     else:
-        # Header with active alert count badge
-        st.markdown(f"""
-            <div style='background-color: #ffffff; padding: 1.25rem 1.5rem 0.75rem 1.5rem;
-                        border-radius: 0; border: 1px solid #e0e0e0;
-                        border-top: 3px solid #d93025; border-bottom: none;'>
-                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                          text-transform: uppercase; letter-spacing: 0.05em;
-                          margin: 0 0 0.5rem 0;'>Alert Center</p>
-                <span style='background: #fce8e6; color: #d93025; font-size: 0.75rem;
-                             font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 2px;'>
-                    {len(alerts_df)} Active
-                </span>
-            </div>
-        """, unsafe_allow_html=True)
+        # Browser-native details toggle: instant open/close without a Streamlit rerun.
+        alert_cards_html = ""
 
         for _, alert in alerts_df.iterrows():
-            # Derive a rough % estimate from James's severity score.
-            # severity 2.0 ≈ 25% deviation, severity 3.0 ≈ 50% deviation.
-            # This gives the manager a sense of magnitude without needing
-            # to understand what "2.4 standard deviations" means.
             severity = float(alert['severity'])
             pct = round((severity - 1) * 25)
 
             if alert['alert_type'] == "Sales Anomaly":
-                # Try to determine direction (up or down) from James's metric string.
-                # Format: "Sales of X is Y std devs from 90-day mean of Z"
-                # If parsing fails, guess based on severity level.
                 try:
-                    parts   = alert['metric'].split()
+                    parts = alert['metric'].split()
                     current = float(parts[2])
-                    mean    = float(parts[-1])
-                    is_up   = current > mean
+                    mean = float(parts[-1])
+                    is_up = current > mean
                 except:
                     is_up = severity > 2.5
 
@@ -959,31 +1146,79 @@ with col_alerts:
                     plain_metric = f"Down ~{pct}% below normal range"
 
             elif alert['alert_type'] == "Demand Decline":
-                # Fallback for older alert format James may still send
                 color = "#d93025"; bg = "#fce8e6"
                 label = "📉 Sales Decreasing"
                 plain_metric = f"Down ~{pct}% below normal range"
 
             else:
-                # Margin alert — only fires when profit column is present in data
                 color = "#5f6368"; bg = "#f1f3f4"
-                label = "Low Profit Margin"
+                label = "⚠️ Low Profit Margin"
                 plain_metric = "This product has been losing money for multiple periods"
 
-            st.markdown(f"""
-                <div style='background-color: {bg}; padding: 0.75rem 1rem;
-                            margin-top: 2px; border-left: 3px solid {color};'>
-                    <span style='color: {color}; font-size: 0.7rem; font-weight: 500;'>
-                        {label}
-                    </span>
-                    <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
-                        {alert['product_name']}
-                    </p>
-                    <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
-                        {plain_metric}
-                    </p>
+            # Andrew Garcia Leopold: show the product name even if the alert data
+            # arrives as "product" instead of "product_name".
+            alert_product_name = alert.get("product_name", alert.get("product", "Unknown product"))
+
+            alert_cards_html += dedent(f"""
+            <div style='background-color: {bg}; padding: 0.75rem 1rem;
+                        margin-top: 2px; border-left: 3px solid {color};'>
+                <span style='color: {color}; font-size: 0.7rem; font-weight: 500;'>
+                    {html.escape(label)}
+                </span>
+                <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
+                    {html.escape(str(alert_product_name))}
+                </p>
+                <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
+                    {html.escape(plain_metric)}
+                </p>
+            </div>
+            """)
+
+        # Andrew Garcia Leopold: use st.html instead of the deprecated components.html.
+        # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
+        st.html(dedent(f"""
+            <style>
+                .alert-toggle {{
+                    font-family: "Google Sans", Roboto, sans-serif;
+                }}
+                details.alert-toggle > summary {{
+                    list-style: none;
+                    cursor: pointer;
+                }}
+                details.alert-toggle > summary::-webkit-details-marker {{
+                    display: none;
+                }}
+            </style>
+            <details class='alert-toggle'>
+                <summary>
+                    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                                border-radius: 0; border: 1px solid #e0e0e0;
+                                border-top: 3px solid #d93025; display: flex;
+                                align-items: center; justify-content: space-between; gap: 1rem;'>
+                        <div>
+                            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem 0;'>
+                                Alert Center
+                            </p>
+                            <span style='background: #fce8e6; color: #d93025; font-size: 0.75rem;
+                                         font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 2px;'>
+                                {len(alerts_df)} Active
+                            </span>
+                        </div>
+                        <span style='background-color: #ffffff; color: #0f9d58; border: 1px solid #dadce0;
+                                     border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.8rem;
+                                     font-weight: 500; white-space: nowrap;'>
+                            Show / hide details
+                        </span>
+                    </div>
+                </summary>
+                <div style='border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #e0e0e0; max-height: 280px;
+                            overflow-y: auto;'>
+                    {alert_cards_html}
                 </div>
-            """, unsafe_allow_html=True)
+            </details>
+        """).strip(), width="stretch")
 
 # ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
 # Side by side panels below the forecast chart.
@@ -1147,7 +1382,7 @@ with col_bar:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, width="stretch")
 
 with col_pie:
     st.markdown("""
@@ -1184,4 +1419,56 @@ with col_pie:
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, width="stretch")
+
+# Andrew Garcia Leopold: Store Breakdown / Store Comparison.
+# This shows stores side by side using total sales from the filtered data.
+# It supports the Segment Analysis task by making store performance easy to compare.
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+st.markdown("""
+    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                border-radius: 0; border: 1px solid #e0e0e0;
+                border-bottom: none; border-top: 3px solid #0f9d58;'>
+        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+            Store Comparison
+        </p>
+        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+            Total revenue by store for the selected filters
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+fig_store = go.Figure()
+fig_store.add_trace(go.Bar(
+    x=store_sales['store_id'].astype(str),
+    y=store_sales['total_sales'],
+    marker_color='#0f9d58',
+    text=[f"${v:,.0f}" for v in store_sales['total_sales']],
+    textposition='auto',
+    cliponaxis=False,
+    hovertemplate='<b>Store %{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+))
+
+fig_store.update_layout(
+    plot_bgcolor='white', paper_bgcolor='white',
+    height=360, margin=dict(l=60, r=20, t=16, b=50),
+    xaxis=dict(
+        title=dict(text="Store ID", font=dict(color='#5f6368', size=11)),
+        showgrid=False,
+        tickfont=dict(color='#5f6368', size=11),
+        showline=True, linecolor='#e0e0e0'
+    ),
+    yaxis=dict(
+        title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+        showgrid=True, gridcolor='#f1f3f4',
+        tickfont=dict(color='#5f6368', size=11),
+        tickformat='$,.0f',
+        range=[0, store_sales['total_sales'].max() * 1.25]
+    ),
+    showlegend=False,
+    font=dict(color='#202124', family='Google Sans, Roboto')
+)
+
+st.plotly_chart(fig_store, width="stretch")

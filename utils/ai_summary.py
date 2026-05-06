@@ -1,3 +1,4 @@
+from utils.trend import compute_trend
 import os
 from dotenv import load_dotenv
 from google import genai
@@ -10,63 +11,83 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # -------------------------------
-# 1. BUILD PAYLOAD
+# 1. BUILD AI PAYLOAD (YOUR PART)
 # -------------------------------
 def build_payload(trend, model_name, accuracy, alerts_df):
     """
-    Builds structured payload for Gemini
+    Andrew Garcia Leopold: build the exact payload shape app.py expects.
+    This keeps the dashboard connected to Sarah's Gemini summary function.
     """
-
     top_alerts = []
 
+    # Andrew Garcia Leopold: only send the top few alerts so the AI prompt stays short.
     if alerts_df is not None and not alerts_df.empty:
         sorted_alerts = alerts_df.sort_values(by="severity", ascending=False).head(3)
 
         for _, row in sorted_alerts.iterrows():
             top_alerts.append({
-                "product": row.get("product", "Unknown"),
+                "product": row.get("product", row.get("product_name", "Unknown")),
                 "type": row.get("alert_type", "Unknown"),
-                "severity": row.get("severity", 0)
+                "severity": row.get("severity", 0),
             })
 
-    payload = {
+    return {
         "model": model_name,
         "accuracy": accuracy,
         "trend": trend,
-        "top_alerts": top_alerts
+        "top_alerts": top_alerts,
+    }
+
+
+def build_ai_payload(df):
+    """
+    Build structured payload for AI consumption.
+    """
+    if df.empty:
+        return {"error": "No data available"}
+
+    trend = compute_trend(df)
+
+    payload = {
+        "trend": trend,
+        "latest_sales": float(df["sales"].iloc[-1]),
+        "avg_sales": float(df["sales"].mean()),
+        "max_sales": float(df["sales"].max()),
+        "min_sales": float(df["sales"].min()),
+        "data_points": len(df)
     }
 
     return payload
 
 
 # -------------------------------
-# 2. GENERATE SUMMARY
+# 2. GENERATE SUMMARY (TEAM PART)
 # -------------------------------
 def generate_summary(payload):
     """
     Sends structured payload to Gemini and returns summary text
     """
-
     try:
+        # Andrew Garcia Leopold: support both the newer dashboard payload and
+        # Sarah's older local-test payload so either path works without crashing.
+        trend = payload.get("trend", "Unknown")
+        accuracy = payload.get("accuracy", "not available")
+        top_alerts = payload.get("top_alerts", [])
+
         prompt = f"""
 You are a retail analytics assistant.
 
-Model accuracy: {payload['accuracy']}
-Sales trend: {payload['trend']}
+Model accuracy: {accuracy}
+Sales trend: {trend}
+Top alerts: {top_alerts}
 
-Top alerts:
-{payload['top_alerts']}
+Write a short, clear business summary (2-3 sentences):
+- describe the current sales trend
+- mention whether alerts are present or not
+- suggest a simple next step
 
-Write a short, professional business summary (3-4 sentences) explaining:
-- what is happening
-- why it matters
-- what action to take
-
-Use a neutral, factual tone.
-Avoid dramatic or urgent language (e.g., "critical", "urgent", "immediate action").
-Keep sentences concise and clear.
-Do not repeat raw numbers.
-"""
+Use plain, direct language suitable for a store manager.
+        """
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
@@ -83,34 +104,3 @@ Do not repeat raw numbers.
             "status": "error",
             "message": str(e)
         }
-
-
-# -------------------------------
-# 3. TEST FUNCTION
-# -------------------------------
-def test_gemini():
-    import pandas as pd
-
-    dummy_alerts = pd.DataFrame([
-        {"product": "Milk", "alert_type": "demand drop", "severity": 0.9},
-        {"product": "Bread", "alert_type": "low margin", "severity": 0.8},
-        {"product": "Eggs", "alert_type": "volatility spike", "severity": 0.7}
-    ])
-
-    payload = build_payload(
-        trend="declining",
-        model_name="Linear Regression",
-        accuracy=0.87,
-        alerts_df=dummy_alerts
-    )
-
-    result = generate_summary(payload)
-
-    return result
-
-
-# -------------------------------
-# RUN TEST
-# -------------------------------
-if __name__ == "__main__":
-    print(test_gemini())
