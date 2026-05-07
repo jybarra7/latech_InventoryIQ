@@ -836,11 +836,11 @@ if forecasts_df is not None:
     pct_change      = ((second_half_avg - first_half_avg) / first_half_avg) * 100
 
     if pct_change > 2:
-        trend_label = "↑ Increasing"
+        trend_label = "Increasing"
         trend_delta = f"+{pct_change:.1f}% vs prior period"
         trend_color = "normal"   # Streamlit renders green for positive normal delta
     elif pct_change < -2:
-        trend_label = "↓ Declining"
+        trend_label = "Declining"
         trend_delta = f"{pct_change:.1f}% vs prior period"
         trend_color = "normal"   # Negative number + normal color = red arrow
     else:
@@ -1108,12 +1108,12 @@ with col3:
             delta_color = "normal"
         elif good_alerts == 0:
             # All alerts are negative
-            delta_text = f"⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
-            delta_color = "inverse"
+            delta_text = f"-⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
+            delta_color = "normal" # changed to normal because a '-' to show negative arrow will inverse the color as well.
         else:
-            # Mix of good and bad
-            delta_text = f"📈 {good_alerts} up · 📉 {bad_alerts} need attention"
-            delta_color = "inverse"
+            # Mix of good and bad 
+            delta_text = f"-📈 {good_alerts} up · 📉 {bad_alerts} need attention"
+            delta_color = "normal"
 
     st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color)
 
