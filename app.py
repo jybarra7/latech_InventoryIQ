@@ -20,6 +20,7 @@ Run with: streamlit run app.py
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import timedelta
@@ -36,7 +37,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "models"))
 from alerter import run_all_alerts  # James's alert engine
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "utils"))
-from processor import map_to_clean_schema, get_feature_flags  # Andrew's processor
+from processor import infer_column_mapping, map_to_clean_schema, get_feature_flags  # Andrew's processor
 from ai_summary import build_payload, generate_summary # Sarah's Gemini integration
 
 # ── Page configuration ───────────────────────────────────────────────────────
@@ -504,22 +505,23 @@ def load_data(file=None):
     Returns:
         df (DataFrame): Clean data ready for filtering and analysis
         data_source (str): Label shown in the page subtitle
+        column_mapping (dict): Clean schema field -> original uploaded column
     """
     if file is not None:
         raw_df = read_uploaded_data(file)
-        if 'store_id' not in raw_df.columns:
-            # Non-standard schema — run through Andrew's normalizer
-            df = map_to_clean_schema(raw_df)
-        else:
-            df = raw_df
+        # Andrew Garcia Leopold: store what the fuzzy mapper detected so the
+        # sidebar can confirm how uploaded columns were interpreted.
+        column_mapping = infer_column_mapping(raw_df)
+        df = map_to_clean_schema(raw_df)
         data_source = "User Uploaded Data"
     else:
         df = pd.read_csv("data/retail_clean.csv")
         data_source = "Benchmark Dataset"
+        column_mapping = {col: col for col in df.columns}
     df["date"] = pd.to_datetime(df["date"])
-    return df, data_source
+    return df, data_source, column_mapping
 
-df, data_source = load_data(uploaded_file)
+df, data_source, column_mapping = load_data(uploaded_file)
 
 # Get feature flags from Andrew's processor — tells us which optional columns
 # (profit, region, transaction_count) are present so we can enable/disable
@@ -636,6 +638,32 @@ st.sidebar.markdown(f"""
         <span style='font-size: 0.8rem; color: #3c4043;'>{profit_dot} {feature_flags["profit"]}</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{region_dot} {feature_flags["region"]}</span><br>
         <span style='font-size: 0.8rem; color: #3c4043;'>{transaction_dot} {feature_flags["transaction_count"]}</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# Andrew Garcia Leopold: show the exact raw column each clean schema field came from.
+# This is the confirmation step after upload so users can spot bad auto-matches.
+mapping_rows = ""
+for clean_column, raw_column in column_mapping.items():
+    mapping_rows += f"""
+        <div style='display:flex; justify-content:space-between; gap:0.5rem;
+                    border-bottom:1px solid #e8eaed; padding:0.25rem 0;'>
+            <span style='color:#0b8043; font-weight:500;'>{html.escape(clean_column)}</span>
+            <span style='color:#5f6368;'>← {html.escape(str(raw_column))}</span>
+        </div>
+    """
+
+st.sidebar.markdown(f"""
+    <div style='background-color: #ffffff; padding: 0.75rem 1rem;
+                border-radius: 4px; border: 1px solid #e0e0e0; margin-top: 0.75rem;'>
+        <p style='font-size: 0.72rem; color: #5f6368; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.4rem 0;'>
+            Column Mapping Confirmation
+        </p>
+        <p style='font-size: 0.72rem; color: #5f6368; margin: 0 0 0.5rem 0;'>
+            Clean field ← uploaded column
+        </p>
+        {mapping_rows}
     </div>
 """, unsafe_allow_html=True)
 
@@ -944,19 +972,6 @@ if generate_clicked:
         )
         top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
 
-        # OLD TEST FUNCTION (kept for reference, no longer used)
-        # result = test_gemini(
-        #     total_revenue    = total_sales_val,
-        #     trend_label      = trend_label,
-        #     trend_delta      = trend_delta,
-        #     alert_count      = len(alerts_df),
-        #     top_product      = top_product_name,
-        #     top_category     = top_category_name,
-        #     projected_total  = projected_val,
-        #     projection_option= projection_option,
-        #     top_alerts       = top_alert_names
-        # )
-
         # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
         # The Alert Center below still needs the original product_name column.
         ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
@@ -1195,9 +1210,9 @@ with col_alerts:
             </div>
             """)
 
-        # Andrew Garcia Leopold: use st.html instead of the deprecated components.html.
-        # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
-        st.html(dedent(f"""
+        # Andrew Garcia Leopold: keep the Alert Center working on different Streamlit versions.
+        # Newer Streamlit has st.html(); older teammates' environments need components.html().
+        alert_center_html = dedent(f"""
             <style>
                 .alert-toggle {{
                     font-family: "Google Sans", Roboto, sans-serif;
@@ -1239,7 +1254,12 @@ with col_alerts:
                     {alert_cards_html}
                 </div>
             </details>
-        """).strip(), width="stretch")
+        """).strip()
+
+        if hasattr(st, "html"):
+            st.html(alert_center_html, width="stretch")
+        else:
+            components.html(alert_center_html, height=360, scrolling=True)
 
 # ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
 # Side by side panels below the forecast chart.
