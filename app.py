@@ -609,39 +609,56 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── Intro panel ───────────────────────────────────────────────────────────────
-# FR-35: Brief introductory panel for first-time viewers.
-# Cached in session state so it only shows once and dismisses cleanly.
+# ── Intro banner ──────────────────────────────────────────────────────────────
+# FR-35: First thing a first-time user sees before interacting with the dashboard.
+# Dismissed by clicking the X button — hidden for the rest of the session.
 
 if 'show_intro' not in st.session_state:
     st.session_state.show_intro = True
 
 if st.session_state.show_intro:
     st.markdown("""
-        <div style='background-color: #e8f0fe; padding: 1.25rem 1.5rem;
-                    border-radius: 0; border: 1px solid #c5d8f6;
-                    border-left: 4px solid #1a73e8; margin-bottom: 1.5rem;'>
-            <p style='color: #1a73e8; font-size: 0.72rem; font-weight: 500;
-                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem 0;'>
-                Welcome to the Retail Forecasting Engine
-            </p>
-            <p style='color: #202124; font-size: 0.875rem; margin: 0 0 0.75rem 0;'>
-                This dashboard ingests your retail sales data and automatically generates
-                demand forecasts, flags at-risk products, and produces plain-English AI summaries
-                — no technical knowledge required.
-            </p>
-            <p style='color: #3c4043; font-size: 0.8rem; margin: 0;'>
-                <b>How to navigate:</b> Use the sidebar to upload your data, filter by store or category,
-                and adjust alert sensitivity. Click <b>✦ Generate Summary</b> for an AI-written overview
-                of what needs your attention.
-            </p>
+        <div style='background-color: #ffffff; border-left: 4px solid #0f9d58;
+                    border: 1px solid #e0e0e0; border-left: 4px solid #0f9d58;
+                    padding: 1.5rem 2rem; margin-bottom: 1.5rem;'>
+            <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
+                <div>
+                    <p style='color: #0f9d58; font-size: 0.72rem; font-weight: 600;
+                              text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.4rem 0;'>
+                        LA Tech Rising · AI-Powered Retail
+                    </p>
+                    <h2 style='color: #202124; font-size: 1.2rem; font-weight: 500; margin: 0 0 0.5rem 0;'>
+                        Welcome to the Retail Forecasting Engine
+                    </h2>
+                    <p style='color: #3c4043; font-size: 0.875rem; line-height: 1.6; margin: 0 0 1rem 0;'>
+                        This dashboard turns raw retail sales data into actionable insights —
+                        demand forecasts, risk alerts, and AI-generated summaries — all in one place.
+                        No technical knowledge required.
+                    </p>
+                    <div style='display: flex; gap: 2rem;'>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            📂 <b>Upload your data</b> in the sidebar
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            🔍 <b>Filter</b> by store, category, or region
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            ✦ <b>Generate Summary</b> for AI insights
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            📊 <b>Scroll down</b> to explore performance
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
-    if st.button("Got it, dismiss"):
-        st.session_state.show_intro = False
-        st.rerun()
-
+    col_dismiss, _ = st.columns([1, 5])
+    with col_dismiss:
+        if st.button("✕ Dismiss", use_container_width=True):
+            st.session_state.show_intro = False
+            st.rerun()
 # ── Data mapping panel ───────────────────────────────────────────────────────
 # Shows the manager which fields were detected in their uploaded data.
 # Green dot = field found and active. Red dot = field missing, feature disabled.
@@ -739,6 +756,20 @@ selected_categories = st.sidebar.multiselect(
     key=f"categories_{st.session_state.reset_counter}"
 )
 
+# bug fix 3:
+# Region filter — only show if 'region' column is present in the dataset
+# Graceful degradation. Hide geographic filters if region is absent
+
+if 'region' in df.columns:
+    regions = sorted(df['region'].unique())
+    selected_regions = st.sidebar.multiselect(
+        "Region", options = regions,
+        default = regions,
+        key = f"regions_{st.session_state.reset_counter}"
+    )
+else:
+    selected_regions = None
+
 # Reset button — increments reset_counter which forces all keyed widgets
 # to re-render as brand new widgets with their default values
 if st.sidebar.button("Reset Filters"):
@@ -773,7 +804,8 @@ df_filtered = df[
     (df['date'] >= pd.to_datetime(start_date)) &
     (df['date'] <= pd.to_datetime(end_date)) &
     (df['store_id'].isin(selected_stores)) &
-    (df['category'].isin(selected_categories))
+    (df['category'].isin(selected_categories)) &
+    (df['region'].isin(selected_regions) if selected_regions is not None else True)
 ].copy()
 
 # Guard against empty filtered data — show a friendly message instead of crashing
@@ -821,11 +853,11 @@ if forecasts_df is not None:
     pct_change      = ((second_half_avg - first_half_avg) / first_half_avg) * 100
 
     if pct_change > 2:
-        trend_label = "↑ Increasing"
+        trend_label = "Increasing"
         trend_delta = f"+{pct_change:.1f}% vs prior period"
         trend_color = "normal"   # Streamlit renders green for positive normal delta
     elif pct_change < -2:
-        trend_label = "↓ Declining"
+        trend_label = "Declining"
         trend_delta = f"{pct_change:.1f}% vs prior period"
         trend_color = "normal"   # Negative number + normal color = red arrow
     else:
@@ -1058,24 +1090,67 @@ with col2:
     # Powered by the trend calculation above — green for up, red for down, gray for steady
     st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
 
+
+# Changed the Active Alerts KPI to show a green border if all alerts are positive spikes,
+# and a red border if there are any negative alerts. This gives the manager an immediate visual
+# cue about whether the alerts are mostly good news or bad news.
 with col3:
     alert_count = len(alerts_df)
+
     if alert_count == 0:
         delta_text = "No issues detected"
         delta_color = "off"
     else:
-        delta_text = f"{alert_count} items need your attention"
-        delta_color = "inverse"  # inverse makes positive numbers show red (bad = more alerts)
+        # Split alerts into good (sales up) vs bad (sales down / margin)
+        good_alerts = 0
+        bad_alerts = 0
+        for _, alert in alerts_df.iterrows():
+            if alert['alert_type'] == "Sales Anomaly":
+                try:
+                    parts = alert['metric'].split()
+                    current = float(parts[2])
+                    mean = float(parts[-1])
+                    if current > mean:
+                        good_alerts += 1
+                    else:
+                        bad_alerts += 1
+                except:
+                    bad_alerts += 1
+            else:
+                bad_alerts += 1
+
+        if bad_alerts == 0:
+            # All alerts are positive spikes
+            delta_text = f"📈 {good_alerts} positive spike{'s' if good_alerts != 1 else ''} detected"
+            delta_color = "normal"
+        elif good_alerts == 0:
+            # All alerts are negative
+            delta_text = f"-⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
+            delta_color = "normal" # changed to normal because a '-' to show negative arrow will inverse the color as well.
+        else:
+            # Mix of good and bad 
+            delta_text = f"-📈 {good_alerts} up · 📉 {bad_alerts} need attention"
+            delta_color = "normal"
+
     st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color)
 
-    # Inject red top border on the Active Alerts card when alerts exist.
-    # Done via CSS injection since Streamlit doesn't support conditional card styling natively.
-    if alert_count > 0:
+    # Only show red border if there are actually bad alerts
+    if alert_count > 0 and bad_alerts > 0:
         st.markdown("""
             <style>
             [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
             [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
                 border-top: 3px solid #d93025 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+    elif alert_count > 0 and bad_alerts == 0:
+        # All good alerts — show green border instead
+        st.markdown("""
+            <style>
+            [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
+            [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+                border-top: 3px solid #0f9d58 !important;
             }
             </style>
         """, unsafe_allow_html=True)
@@ -1512,7 +1587,9 @@ fig_store = go.Figure()
 fig_store.add_trace(go.Bar(
     x=store_sales['store_id'].astype(str),
     y=store_sales['total_sales'],
-    marker_color='#0f9d58',
+    # Made it so that the colors on the store comparison will differ for each store
+    # With the number of colors being the number of stores in the filtered data.
+    marker_color=category_colors[:len(store_sales)], 
     text=[f"${v:,.0f}" for v in store_sales['total_sales']],
     textposition='auto',
     cliponaxis=False,
