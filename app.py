@@ -739,6 +739,20 @@ selected_categories = st.sidebar.multiselect(
     key=f"categories_{st.session_state.reset_counter}"
 )
 
+# bug fix 3:
+# Region filter — only show if 'region' column is present in the dataset
+# Graceful degradation. Hide geographic filters if region is absent
+
+if 'region' in df.columns:
+    regions = sorted(df['region'].unique())
+    selected_regions = st.sidebar.multiselect(
+        "Region", options = regions,
+        default = regions,
+        key = f"regions_{st.session_state.reset_counter}"
+    )
+else:
+    selected_regions = None
+
 # Reset button — increments reset_counter which forces all keyed widgets
 # to re-render as brand new widgets with their default values
 if st.sidebar.button("Reset Filters"):
@@ -773,7 +787,8 @@ df_filtered = df[
     (df['date'] >= pd.to_datetime(start_date)) &
     (df['date'] <= pd.to_datetime(end_date)) &
     (df['store_id'].isin(selected_stores)) &
-    (df['category'].isin(selected_categories))
+    (df['category'].isin(selected_categories)) &
+    (df['region'].isin(selected_regions) if selected_regions is not None else True)
 ].copy()
 
 # Guard against empty filtered data — show a friendly message instead of crashing
