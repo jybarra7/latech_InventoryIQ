@@ -609,39 +609,56 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── Intro panel ───────────────────────────────────────────────────────────────
-# FR-35: Brief introductory panel for first-time viewers.
-# Cached in session state so it only shows once and dismisses cleanly.
+# ── Intro banner ──────────────────────────────────────────────────────────────
+# FR-35: First thing a first-time user sees before interacting with the dashboard.
+# Dismissed by clicking the X button — hidden for the rest of the session.
 
 if 'show_intro' not in st.session_state:
     st.session_state.show_intro = True
 
 if st.session_state.show_intro:
     st.markdown("""
-        <div style='background-color: #e8f0fe; padding: 1.25rem 1.5rem;
-                    border-radius: 0; border: 1px solid #c5d8f6;
-                    border-left: 4px solid #1a73e8; margin-bottom: 1.5rem;'>
-            <p style='color: #1a73e8; font-size: 0.72rem; font-weight: 500;
-                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem 0;'>
-                Welcome to the Retail Forecasting Engine
-            </p>
-            <p style='color: #202124; font-size: 0.875rem; margin: 0 0 0.75rem 0;'>
-                This dashboard ingests your retail sales data and automatically generates
-                demand forecasts, flags at-risk products, and produces plain-English AI summaries
-                — no technical knowledge required.
-            </p>
-            <p style='color: #3c4043; font-size: 0.8rem; margin: 0;'>
-                <b>How to navigate:</b> Use the sidebar to upload your data, filter by store or category,
-                and adjust alert sensitivity. Click <b>✦ Generate Summary</b> for an AI-written overview
-                of what needs your attention.
-            </p>
+        <div style='background-color: #ffffff; border-left: 4px solid #0f9d58;
+                    border: 1px solid #e0e0e0; border-left: 4px solid #0f9d58;
+                    padding: 1.5rem 2rem; margin-bottom: 1.5rem;'>
+            <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
+                <div>
+                    <p style='color: #0f9d58; font-size: 0.72rem; font-weight: 600;
+                              text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.4rem 0;'>
+                        LA Tech Rising · AI-Powered Retail
+                    </p>
+                    <h2 style='color: #202124; font-size: 1.2rem; font-weight: 500; margin: 0 0 0.5rem 0;'>
+                        Welcome to the Retail Forecasting Engine
+                    </h2>
+                    <p style='color: #3c4043; font-size: 0.875rem; line-height: 1.6; margin: 0 0 1rem 0;'>
+                        This dashboard turns raw retail sales data into actionable insights —
+                        demand forecasts, risk alerts, and AI-generated summaries — all in one place.
+                        No technical knowledge required.
+                    </p>
+                    <div style='display: flex; gap: 2rem;'>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            📂 <b>Upload your data</b> in the sidebar
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            🔍 <b>Filter</b> by store, category, or region
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            ✦ <b>Generate Summary</b> for AI insights
+                        </span>
+                        <span style='color: #5f6368; font-size: 0.8rem;'>
+                            📊 <b>Scroll down</b> to explore performance
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
-    if st.button("Got it, dismiss"):
-        st.session_state.show_intro = False
-        st.rerun()
-
+    col_dismiss, _ = st.columns([1, 5])
+    with col_dismiss:
+        if st.button("✕ Dismiss", use_container_width=True):
+            st.session_state.show_intro = False
+            st.rerun()
 # ── Data mapping panel ───────────────────────────────────────────────────────
 # Shows the manager which fields were detected in their uploaded data.
 # Green dot = field found and active. Red dot = field missing, feature disabled.
