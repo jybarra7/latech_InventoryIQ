@@ -1073,24 +1073,67 @@ with col2:
     # Powered by the trend calculation above — green for up, red for down, gray for steady
     st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
 
+
+# Changed the Active Alerts KPI to show a green border if all alerts are positive spikes,
+# and a red border if there are any negative alerts. This gives the manager an immediate visual
+# cue about whether the alerts are mostly good news or bad news.
 with col3:
     alert_count = len(alerts_df)
+
     if alert_count == 0:
         delta_text = "No issues detected"
         delta_color = "off"
     else:
-        delta_text = f"{alert_count} items need your attention"
-        delta_color = "inverse"  # inverse makes positive numbers show red (bad = more alerts)
+        # Split alerts into good (sales up) vs bad (sales down / margin)
+        good_alerts = 0
+        bad_alerts = 0
+        for _, alert in alerts_df.iterrows():
+            if alert['alert_type'] == "Sales Anomaly":
+                try:
+                    parts = alert['metric'].split()
+                    current = float(parts[2])
+                    mean = float(parts[-1])
+                    if current > mean:
+                        good_alerts += 1
+                    else:
+                        bad_alerts += 1
+                except:
+                    bad_alerts += 1
+            else:
+                bad_alerts += 1
+
+        if bad_alerts == 0:
+            # All alerts are positive spikes
+            delta_text = f"📈 {good_alerts} positive spike{'s' if good_alerts != 1 else ''} detected"
+            delta_color = "normal"
+        elif good_alerts == 0:
+            # All alerts are negative
+            delta_text = f"⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
+            delta_color = "inverse"
+        else:
+            # Mix of good and bad
+            delta_text = f"📈 {good_alerts} up · 📉 {bad_alerts} need attention"
+            delta_color = "inverse"
+
     st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color)
 
-    # Inject red top border on the Active Alerts card when alerts exist.
-    # Done via CSS injection since Streamlit doesn't support conditional card styling natively.
-    if alert_count > 0:
+    # Only show red border if there are actually bad alerts
+    if alert_count > 0 and bad_alerts > 0:
         st.markdown("""
             <style>
             [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
             [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
                 border-top: 3px solid #d93025 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+    elif alert_count > 0 and bad_alerts == 0:
+        # All good alerts — show green border instead
+        st.markdown("""
+            <style>
+            [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
+            [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+                border-top: 3px solid #0f9d58 !important;
             }
             </style>
         """, unsafe_allow_html=True)
@@ -1527,7 +1570,9 @@ fig_store = go.Figure()
 fig_store.add_trace(go.Bar(
     x=store_sales['store_id'].astype(str),
     y=store_sales['total_sales'],
-    marker_color='#0f9d58',
+    # Made it so that the colors on the store comparison will differ for each store
+    # With the number of colors being the number of stores in the filtered data.
+    marker_color=category_colors[:len(store_sales)], 
     text=[f"${v:,.0f}" for v in store_sales['total_sales']],
     textposition='auto',
     cliponaxis=False,
