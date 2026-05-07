@@ -777,6 +777,19 @@ alerts_df = run_all_alerts(df_filtered, thresholds={
     'margin_floor': 0.0                 # margin floor uses James's default
 })
 
+# Andrew Garcia Leopold: feature_flags should affect behavior, not just sidebar dots.
+# If profit is missing, margin alerts cannot be calculated, so hide them and explain why.
+profit_data_available = "profit" in df_filtered.columns
+margin_alert_notice = ""
+
+if not profit_data_available:
+    margin_alert_notice = "Profit data is missing, so margin alerts are hidden for this dataset."
+
+    # Safety guard: James's alerter already skips margin alerts without profit,
+    # but this keeps the dashboard correct if alert data changes later.
+    if not alerts_df.empty and "alert_type" in alerts_df.columns:
+        alerts_df = alerts_df[alerts_df["alert_type"] != "Low Margin"].copy()
+
 # ── Sales trend calculation ───────────────────────────────────────────────────
 # Derives trend direction from the filtered historical sales data so the KPI
 # reflects whatever store/category the manager is currently looking at.
@@ -1138,10 +1151,21 @@ with col_chart:
 #   - Estimated % change from normal range (derived from James's severity score)
 # Color coding: Green = sales spike up (good), Red = sales spike down (bad)
 
+margin_alert_notice_html = ""
+if margin_alert_notice:
+    margin_alert_notice_html = f"""
+        <div style='background-color: #f8f9fa; border-left: 3px solid #5f6368;
+                    padding: 0.75rem 1rem; margin-top: 0.75rem;'>
+            <p style='color: #5f6368; font-size: 0.78rem; margin: 0;'>
+                {html.escape(margin_alert_notice)}
+            </p>
+        </div>
+    """
+
 with col_alerts:
     if alerts_df.empty:
         # All clear state: no flags in the filtered data.
-        st.markdown("""
+        st.markdown(f"""
             <div style='background-color: #ffffff; padding: 1.25rem 1.5rem;
                         border-radius: 0; border: 1px solid #e0e0e0;
                         border-top: 3px solid #0f9d58; height: 100%;'>
@@ -1153,6 +1177,7 @@ with col_alerts:
                     <p style='color: #0b8043; font-weight: 500; font-size: 0.9rem; margin: 0;'>All Clear</p>
                     <p style='color: #5f6368; font-size: 0.8rem; margin: 0.25rem 0 0 0;'>No issues detected</p>
                 </div>
+                {margin_alert_notice_html}
             </div>
         """, unsafe_allow_html=True)
     else:
@@ -1251,6 +1276,7 @@ with col_alerts:
                 <div style='border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
                             border-bottom: 1px solid #e0e0e0; max-height: 280px;
                             overflow-y: auto;'>
+                    {margin_alert_notice_html}
                     {alert_cards_html}
                 </div>
             </details>
