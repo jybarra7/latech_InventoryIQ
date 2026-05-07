@@ -57,7 +57,7 @@ def detect_anomalies(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
         latest_sales = group["sales"].iloc[-1]
         z_score = abs((latest_sales - mean) / std)
 
-        if z_score > 0.5:
+        if z_score > threshold:
             results.append({
                 "product_id": product_id,
                 "product_name": group["product_name"].iloc[-1] if "product_name" in group.columns else str(group["product_id"].iloc[-1]),
@@ -72,7 +72,7 @@ def detect_anomalies(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
-def detect_demand_decline(df: pd.DataFrame, decline_pct: float = 0.10) -> pd.DataFrame:
+def detect_demand_decline(df: pd.DataFrame, decline_pct: float = 0.20) -> pd.DataFrame:
     """
     Flags products whose 4-week average sales have dropped more than
     decline_pct below their 12-week average.
@@ -120,7 +120,7 @@ def detect_demand_decline(df: pd.DataFrame, decline_pct: float = 0.10) -> pd.Dat
     return pd.DataFrame(results)
 
 
-def detect_margin_alerts(df: pd.DataFrame, margin_threshold: float = 0.10) -> pd.DataFrame:
+def detect_margin_alerts(df: pd.DataFrame, margin_threshold: float = 0.0) -> pd.DataFrame:
     """
     Flags products with a profit margin below margin_threshold for 2 or more
     consecutive monthly periods. Only runs when profit data is available.
