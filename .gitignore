@@ -7,10 +7,12 @@ __pycache__/
 venv/
 .venv/
 
-# Data files (ignore CSVs but keep the folder)
+# Data files
 *.csv
+*.xlsx
 !data/retail_clean.csv
 !data/forecastUpdated.csv
+!data/updatedForecast.csv
 !data/model_comparison.csv
 
 # OS
@@ -20,3 +22,10 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local launch/log files
+run_streamlit_local.cmd
+streamlit*.log
+
+# Ignore local test files
+utils/test_*.py
