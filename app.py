@@ -1231,6 +1231,12 @@ with col_chart:
             tickformat='$,.0f',
             range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15] # Max(forecase_value) crashes on empty list bug fixed
         ),
+        # I added this to every single fig.update_layout call to ensure that 
+        # all charts will have their hover labels left-aligned instead of the random
+        # left and right sometimes.
+        hoverlabel=dict(
+            align="left"
+        ),
         legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
         hovermode='x unified',
         font=dict(color='#202124', family='Google Sans, Roboto')
@@ -1521,6 +1527,9 @@ with col_bar:
             # 25% headroom above tallest bar so outside labels are never clipped
             range=[0, category_sales['total_sales'].max() * 1.25]
         ),
+        hoverlabel=dict(
+            align="left"
+        ),
         showlegend=False,
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
@@ -1558,6 +1567,9 @@ with col_pie:
             orientation="h", yanchor="top", y=-0.15,
             xanchor="center", x=0.5,
             font=dict(color='#5f6368', size=10)
+        ),
+        hoverlabel=dict(
+            align="left"
         ),
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
@@ -1611,6 +1623,9 @@ fig_store.update_layout(
         tickfont=dict(color='#5f6368', size=11),
         tickformat='$,.0f',
         range=[0, store_sales['total_sales'].max() * 1.25]
+    ),
+    hoverlabel=dict(
+        align="left"
     ),
     showlegend=False,
     font=dict(color='#202124', family='Google Sans, Roboto')
