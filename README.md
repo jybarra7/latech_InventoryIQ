@@ -7,7 +7,7 @@ A reusable retail forecasting engine that ingests historical sales data, forecas
 
 | Role | Name | Primary Ownership |
 |------|------|-------------------|
-| Project Lead · Integration & Debug | Mira Bhakta | End-to-end integration, cross-role debugging, pipeline coordination |
+| Project Lead · Architecture & Infrastructure | Mira Bhakta | System design, model selection, testing suite, CI/CD, deployment, cross-role debugging |
 | Co-Project Lead · Alerting Engine · Forecasting Co-Owner | James Ybarra | `models/alerter.py`, `models/forecaster.py` (co-owner) |
 | Data Preparation & Schema Mapping · Dashboard Support | Andrew Garcia Leopold | `utils/processor.py` - schema mapping + derived fields |
 | Data Preparation (Derived Fields) · AI Insights Support | Krisna Vega | `utils/trend.py` + derived fields in `processor.py` |
