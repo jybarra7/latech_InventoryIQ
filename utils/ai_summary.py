@@ -6,14 +6,14 @@ from google import genai
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# # Initialize Gemini client
+# client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # -------------------------------
 # 1. BUILD AI PAYLOAD (YOUR PART)
 # -------------------------------
-def build_payload(trend, model_name, accuracy, alerts_df):
+def build_payload(trend, model_name, accuracy, alerts_df, top_product=None, top_category=None):
     """
     Andrew Garcia Leopold: build the exact payload shape app.py expects.
     This keeps the dashboard connected to Sarah's Gemini summary function.
@@ -36,28 +36,9 @@ def build_payload(trend, model_name, accuracy, alerts_df):
         "accuracy": accuracy,
         "trend": trend,
         "top_alerts": top_alerts,
+        "top_product": top_product,
+        "top_category": top_category,
     }
-
-
-def build_ai_payload(df):
-    """
-    Build structured payload for AI consumption.
-    """
-    if df.empty:
-        return {"error": "No data available"}
-
-    trend = compute_trend(df)
-
-    payload = {
-        "trend": trend,
-        "latest_sales": float(df["sales"].iloc[-1]),
-        "avg_sales": float(df["sales"].mean()),
-        "max_sales": float(df["sales"].max()),
-        "min_sales": float(df["sales"].min()),
-        "data_points": len(df)
-    }
-
-    return payload
 
 
 # -------------------------------
@@ -67,12 +48,27 @@ def generate_summary(payload):
     """
     Sends structured payload to Gemini and returns summary text
     """
+
+    # Check for Gemini API key
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        return {
+            "status": "error",
+            "message": "Missing Gemini API key."
+        }
+
     try:
+        # Initialize Gemini client inside function
+        client = genai.Client(api_key=api_key)
+
         # Andrew Garcia Leopold: support both the newer dashboard payload and
         # Sarah's older local-test payload so either path works without crashing.
         trend = payload.get("trend", "Unknown")
         accuracy = payload.get("accuracy", "not available")
         top_alerts = payload.get("top_alerts", [])
+        top_product = payload.get("top_product", "Unknown")
+        top_category = payload.get("top_category", "Unknown")
 
         prompt = f"""
 You are a retail analytics assistant.
@@ -80,13 +76,18 @@ You are a retail analytics assistant.
 Model accuracy: {accuracy}
 Sales trend: {trend}
 Top alerts: {top_alerts}
+Top product: {top_product}
+Top category: {top_category}
 
 Write a short, clear business summary (2-3 sentences):
 - describe the current sales trend
+- explicitly mention the top-performing product
 - mention whether alerts are present or not
 - suggest a simple next step
 
-Use plain, direct language suitable for a store manager.
+If a top product is provided, include it naturally in the summary.
+
+Use plain, direct language suitable for a store manager. Avoid repeating raw metric values unless necessary.
         """
 
         response = client.models.generate_content(
@@ -102,5 +103,5 @@ Use plain, direct language suitable for a store manager.
     except Exception as e:
         return {
             "status": "error",
-            "message": str(e)
+            "message": "Gemini is temporarily unavailable due to high demand. Please try again in a moment."
         }

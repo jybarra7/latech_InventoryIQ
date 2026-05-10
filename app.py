@@ -837,41 +837,38 @@ alerts_df = run_all_alerts(df_filtered, thresholds={
 # Method: split the time range in half, compare first half avg vs second half avg.
 # A 2% buffer on either side prevents flat data from being mislabeled.
 
+# Calculate MAE only if residuals are present (older validation files have them;
+# the new forward-forecast file has empty residual/actual columns)
 if forecasts_df is not None:
-    # Calculate MAE only if residuals are present (older validation files have them;
-    # the new forward-forecast file has empty residual/actual columns)
     residuals_available = forecasts_df['residual'].notna().any()
     mae           = round(abs(forecasts_df['residual']).mean(), 2) if residuals_available else None
     avg_pct_error = round((abs(forecasts_df['residual']) / forecasts_df['actual'] * 100).mean(), 1) if residuals_available else None
     method_used   = forecasts_df['method_name'].iloc[0]
-
-    # Aggregate daily sales by date, split in half, compare averages
-    sorted_sales    = df_filtered.sort_values('date').groupby('date')['sales'].sum().tolist()
-    mid             = len(sorted_sales) // 2
-    first_half_avg  = sum(sorted_sales[:mid]) / max(len(sorted_sales[:mid]), 1)
-    second_half_avg = sum(sorted_sales[mid:]) / max(len(sorted_sales[mid:]), 1)
-    pct_change      = ((second_half_avg - first_half_avg) / first_half_avg) * 100
-
-    if pct_change > 2:
-        trend_label = "Increasing"
-        trend_delta = f"+{pct_change:.1f}% vs prior period"
-        trend_color = "normal"   # Streamlit renders green for positive normal delta
-    elif pct_change < -2:
-        trend_label = "Declining"
-        trend_delta = f"{pct_change:.1f}% vs prior period"
-        trend_color = "normal"   # Negative number + normal color = red arrow
-    else:
-        trend_label = "Steady"
-        trend_delta = f"~{pct_change:.1f}% vs prior period"
-        trend_color = "off"      # Gray delta for flat/neutral
 else:
-    # Alberto's file not loaded — show placeholder
-    trend_label = "Pending"
-    trend_delta = "Waiting for forecasts.csv"
-    trend_color = "off"
     mae = None
     avg_pct_error = None
     method_used = None
+
+# Aggregate daily sales by date, split in half, compare averages
+sorted_sales    = df_filtered.sort_values('date').groupby('date')['sales'].sum().tolist()
+mid             = len(sorted_sales) // 2
+first_half_avg  = sum(sorted_sales[:mid]) / max(len(sorted_sales[:mid]), 1)
+second_half_avg = sum(sorted_sales[mid:]) / max(len(sorted_sales[mid:]), 1)
+pct_change      = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+
+if pct_change > 2:
+    trend_label = "Increasing"
+    trend_delta = f"+{pct_change:.1f}% vs prior period"
+    trend_color = "normal"   # Streamlit renders green for positive normal delta
+elif pct_change < -2:
+    trend_label = "Declining"
+    trend_delta = f"{pct_change:.1f}% vs prior period"
+    trend_color = "normal"   # Negative number + normal color = red arrow
+else:
+    trend_label = "Steady"
+    trend_delta = f"~{pct_change:.1f}% vs prior period"
+    trend_color = "off"      # Gray delta for flat/neutral
+
 
 # ── Forecast values calculation ───────────────────────────────────────────────
 # Calculated here (before the KPI row) so forecast_values is available for
@@ -1039,6 +1036,12 @@ if generate_clicked:
         # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
         # The Alert Center below still needs the original product_name column.
         ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
+
+          # Find top-performing product and category by total sales
+        top_product = df_filtered.groupby("product_name")["sales"].sum().idxmax()
+
+        top_category = df_filtered.groupby("category")["sales"].sum().idxmax()  
+
 
         # Build payload for Gemini (new structured approach)
         payload = build_payload(
