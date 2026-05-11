@@ -743,33 +743,27 @@ st.sidebar.markdown(f"""
 
 # Andrew Garcia Leopold: show the exact raw column each clean schema field came from.
 # This is the confirmation step after upload so users can spot bad auto-matches.
-mapping_rows = []
-for clean_column, raw_column in column_mapping.items():
-    # Andrew Garcia Leopold: keep each row as one HTML line.
-    # Extra indentation can make Streamlit render the HTML as a code block.
-    mapping_rows.append(
-        "<div style='display:flex; justify-content:space-between; gap:0.5rem; "
-        "border-bottom:1px solid #e8eaed; padding:0.25rem 0;'>"
-        f"<span style='color:#0b8043; font-weight:500;'>{html.escape(clean_column)}</span>"
-        f"<span style='color:#5f6368;'>&larr; {html.escape(str(raw_column))}</span>"
-        "</div>"
-    )
 
-mapping_rows_html = "".join(mapping_rows)
+# Justin Hernandez: Made sure that the column mapping panel is only visible when a user uploads their own data since
+# the benchmark dataset already matches the clean schema.
 
-st.sidebar.markdown(f"""
-    <div style='background-color: #ffffff; padding: 0.75rem 1rem;
-                border-radius: 4px; border: 1px solid #e0e0e0; margin-top: 0.75rem;'>
-        <p style='font-size: 0.72rem; color: #5f6368; font-weight: 500;
-                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.4rem 0;'>
-            Column Mapping Confirmation
+if data_source == "User Uploaded Data":
+    st.sidebar.markdown("""
+        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500; 
+                  text-transform: uppercase; letter-spacing: 0.05em; 
+                  margin: 1.25rem 0 0.5rem 0;'>
+            Column Mapping
         </p>
-        <p style='font-size: 0.72rem; color: #5f6368; margin: 0 0 0.5rem 0;'>
-            Clean field ← uploaded column
-        </p>
-        {mapping_rows_html}
-    </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+    for clean_col, raw_col in column_mapping.items():
+        st.sidebar.markdown(f"""
+            <div style='display:flex; justify-content:space-between;
+                        border-bottom:1px solid #e8eaed; padding:0.2rem 0;
+                        background-color:#f8f9fa;'>
+                <span style='color:#0b8043; font-weight:500; font-size:0.78rem; padding-left:0.5rem;'>{html.escape(str(clean_col))}</span>
+                <span style='color:#5f6368; font-size:0.78rem; padding-right:0.5rem;'>← {html.escape(str(raw_col))}</span>
+            </div>
+        """, unsafe_allow_html=True)
 
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
@@ -1320,16 +1314,11 @@ with col_chart:
 #   - Estimated % change from normal range (derived from James's severity score)
 # Color coding: Green = sales spike up (good), Red = sales spike down (bad)
 
-margin_alert_notice_html = ""
-if margin_alert_notice:
-    margin_alert_notice_html = f"""
-        <div style='background-color: #f8f9fa; border-left: 3px solid #5f6368;
-                    padding: 0.75rem 1rem; margin-top: 0.75rem;'>
-            <p style='color: #5f6368; font-size: 0.78rem; margin: 0;'>
-                {html.escape(margin_alert_notice)}
-            </p>
-        </div>
-    """
+margin_alert_notice_html = (
+    f"<p style='color: #5f6368; font-size: 0.78rem; margin: 0.75rem 0 0 0; "
+    f"border-left: 3px solid #5f6368; padding-left: 0.75rem;'>"
+    f"{html.escape(margin_alert_notice)}</p>"
+) if margin_alert_notice else ""
 
 with col_alerts:
     if alerts_df.empty:
