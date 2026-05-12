@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 try:
-    from google import genai
+    import google.generativeai as genai
 except ImportError:
     genai = None
 
@@ -17,8 +17,8 @@ def get_gemini_client():
         return None, "GEMINI_API_KEY is not set."
     if genai is None:
         return None, "google-genai is not installed."
-    return genai.Client(api_key=api_key), None
-
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel("gemini-1.5-flash"), None
 
 # -------------------------------
 # 1. BUILD AI PAYLOAD (YOUR PART)
@@ -113,10 +113,8 @@ If a top product is provided, include it naturally in the summary.
 Use plain, direct language suitable for a store manager. Avoid repeating raw metric values unless necessary.
         """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
+    response = client.generate_content(prompt)
+
 
         return {
             "status": "success",
