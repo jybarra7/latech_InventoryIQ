@@ -11,6 +11,9 @@ venv/
 *.csv
 *.xlsx
 !data/retail_clean.csv
+!data/forecastUpdated.csv
+!data/updatedForecast.csv
+!data/model_comparison.csv
 
 # OS
 .DS_Store
@@ -20,6 +23,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Local launch/log files
+run_streamlit_local.cmd
+streamlit*.log
 # Local Codex/agent notes
 AGENTS.md
 

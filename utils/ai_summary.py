@@ -1,13 +1,23 @@
 from utils.trend import compute_trend
 import os
 from dotenv import load_dotenv
-from google import genai
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 # Load environment variables
 load_dotenv()
 
-# # Initialize Gemini client
-# client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+def get_gemini_client():
+    """Create the Gemini client only when a key is available."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None, "GEMINI_API_KEY is not set."
+    if genai is None:
+        return None, "google-genai is not installed."
+    return genai.Client(api_key=api_key), None
 
 
 # -------------------------------
@@ -36,6 +46,25 @@ def build_payload(trend, model_name, accuracy, alerts_df, top_product=None, top_
         "accuracy": accuracy,
         "trend": trend,
         "top_alerts": top_alerts,
+    }
+
+
+def build_ai_payload(df):
+    """
+    Build structured payload for AI consumption.
+    """
+    if df.empty:
+        return {"error": "No data available"}
+
+    trend = compute_trend(df)
+
+    payload = {
+        "trend": trend,
+        "latest_sales": float(df["sales"].iloc[-1]),
+        "avg_sales": float(df["sales"].mean()),
+        "max_sales": float(df["sales"].max()),
+        "min_sales": float(df["sales"].min()),
+        "data_points": len(df)
         "top_product": top_product,
         "top_category": top_category,
     }
@@ -48,19 +77,13 @@ def generate_summary(payload):
     """
     Sends structured payload to Gemini and returns summary text
     """
-
-    # Check for Gemini API key
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        return {
-            "status": "error",
-            "message": "Missing Gemini API key."
-        }
-
     try:
-        # Initialize Gemini client inside function
-        client = genai.Client(api_key=api_key)
+        client, client_error = get_gemini_client()
+        if client_error:
+            return {
+                "status": "error",
+                "message": client_error
+            }
 
         # Andrew Garcia Leopold: support both the newer dashboard payload and
         # Sarah's older local-test payload so either path works without crashing.
