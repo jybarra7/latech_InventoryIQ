@@ -1,6 +1,8 @@
 import pandas as pd
+from difflib import get_close_matches
+import re
 
-from utils.schema import OPTIONAL_COLUMNS, SCHEMA
+from utils.schema import COLUMN_ALIASES, OPTIONAL_COLUMNS, SCHEMA
 
 
 # -------------------------
@@ -41,76 +43,99 @@ def get_feature_flags(raw_data: pd.DataFrame) -> dict:
 
 
 # -------------------------
-# SCHEMA MAPPING SYSTEM
+# FUZZY SCHEMA MAPPING
 # -------------------------
-SOURCE_MAPPINGS = {
-    "retail_clean": {
-        "required_columns": {"date", "store_id", "product_id", "sales"},
-        "rename_columns": {},
-        "defaults": {"category": "Uncategorized"},
-        "id_fields": {},
-    },
-    "store_item_demand": {
-        "required_columns": {"date", "store", "item", "sales"},
-        "rename_columns": {"store": "store_id", "item": "product_id"},
-        "defaults": {"category": "Uncategorized"},
-        "id_fields": {},
-    },
-    "retail_orders": {
-        "required_columns": {
-            "Order Date",
-            "State",
-            "Category",
-            "Product Name",
-            "Sales",
-            "Quantity",
-            "Profit",
-        },
-        "rename_columns": {
-            "Order Date": "date",
-            "Product Name": "product_name",
-            "Category": "category",
-            "Sales": "sales",
-            "Quantity": "quantity",
-            "Profit": "profit",
-            "State": "region",
-        },
-        "defaults": {},
-        "id_fields": {
-            "store_id": "region",
-            "product_id": "product_name",
-        },
-    },
-}
+def normalize_column_name(column_name: str) -> str:
+    """Andrew Garcia Leopold: make column names easier to compare."""
+    # Example: "Order_Date" and "order date" both become "order date".
+    column_name = str(column_name).strip().lower()
+    column_name = re.sub(r"[_\-]+", " ", column_name)
+    column_name = re.sub(r"[^a-z0-9 ]+", "", column_name)
+    return re.sub(r"\s+", " ", column_name).strip()
 
 
-def detect_source_format(df: pd.DataFrame) -> str:
-    columns = set(df.columns)
+def build_alias_lookup() -> dict:
+    """Andrew Garcia Leopold: convert COLUMN_ALIASES into a fast lookup table."""
+    alias_lookup = {}
 
-    for name, mapping in SOURCE_MAPPINGS.items():
-        if mapping["required_columns"].issubset(columns):
-            return name
+    for clean_column, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            normalized_alias = normalize_column_name(alias)
+            alias_lookup.setdefault(normalized_alias, []).append(clean_column)
 
-    raise ValueError("Unsupported dataset format.")
+    return alias_lookup
 
 
-def map_to_standard_schema(df: pd.DataFrame, source_format: str) -> pd.DataFrame:
-    mapping = SOURCE_MAPPINGS[source_format]
+def resolve_alias_match(clean_columns: list, raw_series: pd.Series) -> str:
+    """Andrew Garcia Leopold: pick the safest clean column for an ambiguous alias."""
+    if len(clean_columns) == 1:
+        return clean_columns[0]
 
-    df = df.rename(columns=mapping["rename_columns"]).copy()
+    # Andrew: if a column could mean product ID or product name, use the values.
+    # Numeric-looking values are IDs; text values are names.
+    if {"product_id", "product_name"}.issubset(clean_columns):
+        numeric_values = pd.to_numeric(raw_series.dropna(), errors="coerce")
+        return "product_id" if numeric_values.notna().all() else "product_name"
 
-    for col, default in mapping["defaults"].items():
-        if col not in df.columns:
-            df[col] = default
+    # Andrew: if we cannot confidently decide, keep the schema order from COLUMN_ALIASES.
+    return clean_columns[0]
 
-    for id_col, src_col in mapping["id_fields"].items():
-        df[id_col] = pd.factorize(df[src_col])[0] + 1
 
-    if "product_name" not in df.columns:
-        df["product_name"] = "Item " + df["product_id"].astype(str)
+def infer_column_mapping(df: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: map uploaded columns to the shared clean schema."""
+    alias_lookup = build_alias_lookup()
+    normalized_aliases = list(alias_lookup.keys())
+    mapping = {}
 
-    if "quantity" not in df.columns:
-        df["quantity"] = df["sales"]
+    for raw_column in df.columns:
+        normalized_column = normalize_column_name(raw_column)
+
+        # First try a direct alias match, like "Order Date" -> "date".
+        clean_columns = alias_lookup.get(normalized_column)
+
+        # Then try a fuzzy match for close names, like "sale amount" vs "sales amount".
+        if clean_columns is None:
+            close_matches = get_close_matches(normalized_column, normalized_aliases, n=1, cutoff=0.88)
+            if close_matches:
+                clean_columns = alias_lookup[close_matches[0]]
+
+        if clean_columns is None:
+            continue
+
+        clean_column = resolve_alias_match(clean_columns, df[raw_column])
+
+        # Andrew: one uploaded column should only fill one clean schema field.
+        # This keeps the inferred mapping predictable for the dashboard.
+        if clean_column and clean_column not in mapping:
+            mapping[clean_column] = raw_column
+
+    return mapping
+
+
+def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: rename detected columns into the shared project schema."""
+    df = df.copy()
+    column_mapping = infer_column_mapping(df)
+
+    # Andrew: date and sales are the hard requirements. Missing product/store
+    # dimensions are handled below as a single aggregated series.
+    missing_required = [col for col in ["date", "sales"] if col not in column_mapping]
+    if missing_required:
+        raise ValueError(
+            "Unsupported dataset format. Missing required fields: "
+            + ", ".join(missing_required)
+        )
+
+    rename_columns = {raw: clean for clean, raw in column_mapping.items()}
+    df = df.rename(columns=rename_columns)
+    df.attrs["column_mapping"] = column_mapping
+
+    # Andrew Garcia Leopold: if a file has names but not IDs, create simple IDs.
+    if "store_id" not in df.columns and "region" in df.columns:
+        df["store_id"] = pd.factorize(df["region"])[0] + 1
+
+    if "product_id" not in df.columns and "product_name" in df.columns:
+        df["product_id"] = pd.factorize(df["product_name"])[0] + 1
 
     return df
 
@@ -121,9 +146,8 @@ def map_to_standard_schema(df: pd.DataFrame, source_format: str) -> pd.DataFrame
 def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # Detect + standardize schema
-    source_format = detect_source_format(df)
-    df = map_to_standard_schema(df, source_format)
+    # Detect + standardize schema with the fuzzy alias mapper.
+    df = map_to_standard_schema(df)
 
     # Optional feature tracking
     optional_fields = {
@@ -132,13 +156,27 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
         "transaction_count": "active" if "transaction_count" in df.columns else "inactive",
     }
     df.attrs["optional_fields"] = optional_fields
+    aggregation_notes = []
 
     # Fallbacks
     if "product_id" not in df.columns:
-        df["product_id"] = df.index
+        # If no product field exists, treat the upload as one aggregated product
+        # series instead of creating one group per row.
+        df["product_id"] = 0
+        df["product_name"] = "Aggregated Series"
+        aggregation_notes.append(
+            "No product field detected; using one aggregated product series."
+        )
 
     if "store_id" not in df.columns:
+        # A constant store keeps lag/rolling features meaningful for aggregate files.
         df["store_id"] = 0
+        aggregation_notes.append(
+            "No store field detected; using one aggregated store series."
+        )
+
+    if aggregation_notes:
+        df.attrs["aggregation_notes"] = aggregation_notes
 
     if "quantity" not in df.columns:
         df["quantity"] = df["sales"]
