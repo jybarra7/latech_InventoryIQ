@@ -1197,7 +1197,7 @@ with col_alerts:
 
         # Andrew Garcia Leopold: use st.html instead of the deprecated components.html.
         # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
-        st.html(dedent(f"""
+        components.html(dedent(f"""
             <style>
                 .alert-toggle {{
                     font-family: "Google Sans", Roboto, sans-serif;
@@ -1239,7 +1239,7 @@ with col_alerts:
                     {alert_cards_html}
                 </div>
             </details>
-        """).strip(), width="stretch")
+        """).strip(), height=350)
 
 # ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
 # Side by side panels below the forecast chart.
@@ -1485,7 +1485,7 @@ fig_store.update_layout(
         title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
         showgrid=True, gridcolor='#f1f3f4',
         tickfont=dict(color='#5f6368', size=11),
-        tickformat='$,.0f',
+        tickformat='$,.0f',  
         range=[0, store_sales['total_sales'].max() * 1.25]
     ),
     showlegend=False,
