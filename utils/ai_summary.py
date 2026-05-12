@@ -23,7 +23,7 @@ def get_gemini_client():
 # -------------------------------
 # 1. BUILD AI PAYLOAD (YOUR PART)
 # -------------------------------
-def build_payload(trend, model_name, accuracy, alerts_df):
+def build_payload(trend, model_name, accuracy, alerts_df, top_product=None, top_category=None):
     """
     Andrew Garcia Leopold: build the exact payload shape app.py expects.
     This keeps the dashboard connected to Sarah's Gemini summary function.
@@ -65,9 +65,9 @@ def build_ai_payload(df):
         "max_sales": float(df["sales"].max()),
         "min_sales": float(df["sales"].min()),
         "data_points": len(df)
+        "top_product": top_product,
+        "top_category": top_category,
     }
-
-    return payload
 
 
 # -------------------------------
@@ -90,6 +90,8 @@ def generate_summary(payload):
         trend = payload.get("trend", "Unknown")
         accuracy = payload.get("accuracy", "not available")
         top_alerts = payload.get("top_alerts", [])
+        top_product = payload.get("top_product", "Unknown")
+        top_category = payload.get("top_category", "Unknown")
 
         prompt = f"""
 You are a retail analytics assistant.
@@ -97,13 +99,18 @@ You are a retail analytics assistant.
 Model accuracy: {accuracy}
 Sales trend: {trend}
 Top alerts: {top_alerts}
+Top product: {top_product}
+Top category: {top_category}
 
 Write a short, clear business summary (2-3 sentences):
 - describe the current sales trend
+- explicitly mention the top-performing product
 - mention whether alerts are present or not
 - suggest a simple next step
 
-Use plain, direct language suitable for a store manager.
+If a top product is provided, include it naturally in the summary.
+
+Use plain, direct language suitable for a store manager. Avoid repeating raw metric values unless necessary.
         """
 
         response = client.models.generate_content(
@@ -119,5 +126,5 @@ Use plain, direct language suitable for a store manager.
     except Exception as e:
         return {
             "status": "error",
-            "message": str(e)
+            "message": "Gemini is temporarily unavailable due to high demand. Please try again in a moment."
         }

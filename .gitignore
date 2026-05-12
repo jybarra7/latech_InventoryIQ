@@ -26,6 +26,8 @@ Thumbs.db
 # Local launch/log files
 run_streamlit_local.cmd
 streamlit*.log
+# Local Codex/agent notes
+AGENTS.md
 
 # Ignore local test files
 utils/test_*.py

@@ -60,7 +60,7 @@ def detect_anomalies(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
         if z_score > threshold:
             results.append({
                 "product_id": product_id,
-                "product_name": group["product_name"].iloc[-1],
+                "product_name": group["product_name"].iloc[-1] if "product_name" in group.columns else str(group["product_id"].iloc[-1]),
                 "alert_type": "Sales Anomaly",
                 "severity": round(z_score, 2),
                 "metric": (
@@ -108,7 +108,7 @@ def detect_demand_decline(df: pd.DataFrame, decline_pct: float = 0.20) -> pd.Dat
         if drop > decline_pct:
             results.append({
                 "product_id": product_id,
-                "product_name": group["product_name"].iloc[-1],
+                "product_name": group["product_name"].iloc[-1] if "product_name" in group.columns else str(group["product_id"].iloc[-1]),
                 "alert_type": "Demand Decline",
                 "severity": round(drop, 2),
                 "metric": (
@@ -168,7 +168,7 @@ def detect_margin_alerts(df: pd.DataFrame, margin_threshold: float = 0.0) -> pd.
             latest_margin = group["margin"].iloc[-1]
             results.append({
                 "product_id": product_id,
-                "product_name": group["product_name"].iloc[-1],
+                "product_name": group["product_name"].iloc[-1] if "product_name" in group.columns else str(group["product_id"].iloc[-1]),
                 "alert_type": "Low Margin",
                 "severity": round(abs(latest_margin), 2),
                 "metric": (
@@ -205,9 +205,6 @@ def run_all_alerts(df: pd.DataFrame, thresholds: dict = {}) -> pd.DataFrame:
         combined = pd.concat([anomalies, declines, margins], ignore_index=True)
 
     combined = combined.sort_values("severity", ascending=False).reset_index(drop=True) if not combined.empty else combined
-    combined.to_csv(ALERTS_CSV_PATH, index=False)
-
-    print(f"Exported {len(combined)} alerts to {ALERTS_CSV_PATH}")
 
     return combined
 
