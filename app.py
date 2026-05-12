@@ -33,9 +33,25 @@ import os
 # We append to sys.path so Python can find modules in subdirectories
 # without requiring an installed package structure.
 
+sys.path.append(os.path.join(os.path.dirname(__file__), "models"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "utils"))
-from processor import infer_column_mapping, map_to_clean_schema, get_feature_flags  # Andrew's processor
-from ai_summary import build_payload, generate_summary  # Sarah's Gemini integration
+
+try:
+    from alerter import run_all_alerts
+except ImportError:
+    def run_all_alerts(df, thresholds=None):
+        import pandas as pd
+        return pd.DataFrame()
+
+try:
+    from processor import infer_column_mapping, map_to_clean_schema, get_feature_flags
+    from ai_summary import build_payload, generate_summary
+except ImportError:
+    def infer_column_mapping(df): return {col: col for col in df.columns}
+    def map_to_clean_schema(df): return df
+    def get_feature_flags(df): return {"profit": "Profit data missing", "region": "Region data missing", "transaction_count": "Transaction count missing"}
+    def build_payload(**kwargs): return {}
+    def generate_summary(payload): return {"status": "error", "message": "AI module unavailable"}
 
 # ── Page configuration ───────────────────────────────────────────────────────
 # Must be the first Streamlit call in the file — sets browser tab title
@@ -329,8 +345,6 @@ st.markdown("""
         content: none !important;
     }
 
-
-
     h1, h2, h3 {
         background-color: transparent !important;
         color: #202124 !important;
@@ -405,7 +419,7 @@ st.markdown("""
         background-color: #e6f4ea !important;
         border-color: #0f9d58 !important;
     }
-            
+
     /* Force entire spinner container and all children to be dark */
     [data-testid="stSpinner"],
     [data-testid="stSpinner"] *,
@@ -627,11 +641,10 @@ def load_forecasts(file=None):
     for forecast_path in forecast_paths:
         if not os.path.exists(forecast_path):
             continue
-
         df_f = pd.read_csv(forecast_path)
         df_f['date'] = pd.to_datetime(df_f['date'])
         return df_f
-        return None
+    return None
 
 forecasts_df = load_forecasts(uploaded_forecast)
 
@@ -769,7 +782,6 @@ st.markdown(f"""
         </p>
     </div>
 """, unsafe_allow_html=True)
-
 
 # ── Intro banner ──────────────────────────────────────────────────────────────
 # FR-35: First thing a first-time user sees before interacting with the dashboard.
@@ -959,9 +971,9 @@ selected_categories = st.sidebar.multiselect(
 if 'region' in df.columns:
     regions = sorted(df['region'].unique())
     selected_regions = st.sidebar.multiselect(
-        "Region", options = regions,
-        default = regions,
-        key = f"regions_{st.session_state.reset_counter}"
+        "Region", options=regions,
+        default=regions,
+        key=f"regions_{st.session_state.reset_counter}"
     )
 else:
     selected_regions = None
@@ -1053,36 +1065,11 @@ if forecasts_df is not None:
     mae           = round(abs(forecasts_df['residual']).mean(), 2) if residuals_available else None
     avg_pct_error = round((abs(forecasts_df['residual']) / forecasts_df['actual'] * 100).mean(), 1) if residuals_available else None
     method_used   = forecasts_df['method_name'].iloc[0]
-
-    # Aggregate daily sales by date, split in half, compare averages
-    sorted_sales = df_filtered.sort_values('date').groupby('date')['sales'].sum().tolist()
-    mid = len(sorted_sales) // 2
-    first_half_avg = sum(sorted_sales[:mid]) / max(len(sorted_sales[:mid]), 1)
-    second_half_avg = sum(sorted_sales[mid:]) / max(len(sorted_sales[mid:]), 1)
-    pct_change = ((second_half_avg - first_half_avg) / first_half_avg) * 100
-
-    if pct_change > 2:
-        trend_label = "Increasing"
-        trend_delta = f"+{pct_change:.1f}% vs prior period"
-        trend_color = "normal"
-    elif pct_change < -2:
-        trend_label = "Declining"
-        trend_delta = f"{pct_change:.1f}% vs prior period"
-        trend_color = "normal"
-    else:
-        trend_label = "Steady"
-        trend_delta = f"~{pct_change:.1f}% vs prior period"
-        trend_color = "off"
 else:
-    # Alberto's file not loaded — show placeholder
-    trend_label = "Pending"
-    trend_delta = "Waiting for forecasts.csv"
-    trend_color = "off"
-
     mae = None
     avg_pct_error = None
     method_used = None
-    
+
 if model_accuracy_df is not None and not model_accuracy_df.empty:
     winner_rows = model_accuracy_df[model_accuracy_df["selected_winner"] == True]
     if winner_rows.empty and "mae" in model_accuracy_df.columns and model_accuracy_df["mae"].notna().any():
@@ -1091,10 +1078,10 @@ if model_accuracy_df is not None and not model_accuracy_df.empty:
         accuracy_winner = model_accuracy_df.iloc[0]
     else:
         accuracy_winner = winner_rows.iloc[0]
-
     method_used = accuracy_winner.get("method_name", method_used)
     if mae is None and "mae" in model_accuracy_df.columns and pd.notna(accuracy_winner.get("mae", pd.NA)):
         mae = round(float(accuracy_winner.get("mae")), 3)
+
 # Aggregate daily sales by date, split in half, compare averages
 sorted_sales    = df_filtered.sort_values('date').groupby('date')['sales'].sum().tolist()
 mid             = len(sorted_sales) // 2
@@ -1114,7 +1101,6 @@ else:
     trend_label = "Steady"
     trend_delta = f"~{pct_change:.1f}% vs prior period"
     trend_color = "off"      # Gray delta for flat/neutral
-
 
 # ── Forecast values calculation ───────────────────────────────────────────────
 # Calculated here (before the KPI row) so forecast_values is available for
@@ -1199,6 +1185,13 @@ category_sales = (
     .sort_values('total_sales', ascending=False)
 )
 
+# Monthly revenue per category for the trend line chart
+category_monthly = (
+    df_filtered.groupby(['category', df_filtered['date'].dt.to_period('M')])['sales']
+    .sum().reset_index()
+)
+category_monthly['period'] = category_monthly['date'].astype(str)
+
 # Andrew Garcia Leopold: Store comparison adds up total sales for each store.
 # This uses df_filtered, so it changes when the user changes store/category filters.
 store_sales = (
@@ -1245,8 +1238,8 @@ col_ai_btn = st.columns([1, 5])[0]
 with col_ai_btn:
     generate_clicked = st.button("✦ Generate Summary")
 
-# Deleted the Clear button to simplify the interface. Also 
-# It is not longer needed st.session_state.ai_summary is set to None 
+# Deleted the Clear button to simplify the interface. Also
+# it is no longer needed — st.session_state.ai_summary is set to None
 # when filter resets since it does not show up anymore.
 
 if generate_clicked:
@@ -1268,17 +1261,7 @@ if generate_clicked:
         top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
 
         # OLD TEST FUNCTION (kept for reference, no longer used)
-        # result = test_gemini(
-        #     total_revenue    = total_sales_val,
-        #     trend_label      = trend_label,
-        #     trend_delta      = trend_delta,
-        #     alert_count      = len(alerts_df),
-        #     top_product      = top_product_name,
-        #     top_category     = top_category_name,
-        #     projected_total  = projected_val,
-        #     projection_option= projection_option,
-        #     top_alerts       = top_alert_names
-        # )
+        # result = test_gemini(...)
 
         # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
         # The Alert Center below still needs the original product_name column.
@@ -1306,6 +1289,7 @@ if generate_clicked:
                     ⚠️ Could not generate summary — {result["message"]}
                 </div>
             """, unsafe_allow_html=True)
+
 # Display the cached AI summary if one exists
 if st.session_state.ai_summary:
     st.markdown(f"""
@@ -1334,7 +1318,6 @@ with col2:
     # Powered by the trend calculation above — green for up, red for down, gray for steady
     st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
 
-
 # Changed the Active Alerts KPI to show a green border if all alerts are positive spikes,
 # and a red border if there are any negative alerts. This gives the manager an immediate visual
 # cue about whether the alerts are mostly good news or bad news.
@@ -1344,6 +1327,8 @@ with col3:
     if alert_count == 0:
         delta_text = "No issues detected"
         delta_color = "off"
+        bad_alerts = 0
+        good_alerts = 0
     else:
         # Split alerts into good (sales up) vs bad (sales down / margin)
         good_alerts = 0
@@ -1370,9 +1355,9 @@ with col3:
         elif good_alerts == 0:
             # All alerts are negative
             delta_text = f"-⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
-            delta_color = "normal" # changed to normal because a '-' to show negative arrow will inverse the color as well.
+            delta_color = "normal"  # changed to normal because a '-' to show negative arrow will inverse the color as well.
         else:
-            # Mix of good and bad 
+            # Mix of good and bad
             delta_text = f"-📈 {good_alerts} up · 📉 {bad_alerts} need attention"
             delta_color = "normal"
 
@@ -1473,14 +1458,18 @@ with col_chart:
             title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
             tickfont=dict(color='#5f6368', size=11),
             tickformat='$,.0f',
-            range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15] # Max(forecase_value) crashes on empty list bug fixed
+            range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15]  # max(forecast_values) crashes on empty list bug fixed
         ),
+        # I added this to every single fig.update_layout call to ensure that
+        # all charts will have their hover labels left-aligned instead of the random
+        # left and right sometimes.
+        hoverlabel=dict(align="left"),
         legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
         hovermode='x unified',
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ── Alert panel ───────────────────────────────────────────────────────────────
 # Powered by James's alerter. Each card shows:
@@ -1561,7 +1550,7 @@ with col_alerts:
             </div>
             """)
 
-        # Andrew Garcia Leopold: use st.html instead of the deprecated components.html.
+        # Andrew Garcia Leopold: use components.html to keep Alert Center working on different Streamlit versions.
         # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
         components.html(dedent(f"""
             <style>
@@ -1609,6 +1598,10 @@ with col_alerts:
 
 st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
 
+# ── Model Accuracy panel ──────────────────────────────────────────────────────
+# Shows Alberto's model benchmarking results — which method won and by how much.
+# Reads from model_comparison.csv if available, falls back to forecast residuals.
+
 st.markdown("""
     <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
                 border-radius: 0; border: 1px solid #e0e0e0;
@@ -1648,15 +1641,7 @@ else:
     metric_cols[3].metric("Models Compared", f"{len(accuracy_view):,}")
 
     display_columns = [
-        col for col in [
-            "method_name",
-            "selected_winner",
-            "mae",
-            "rmse",
-            "mase",
-            "rows",
-            "notes",
-        ]
+        col for col in ["method_name", "selected_winner", "mae", "rmse", "mase", "rows", "notes"]
         if col in accuracy_view.columns
     ]
 
@@ -1664,11 +1649,7 @@ else:
         if col in accuracy_view.columns:
             accuracy_view[col] = pd.to_numeric(accuracy_view[col], errors="coerce").round(3)
 
-    st.dataframe(
-        accuracy_view[display_columns],
-        use_container_width=True,
-        hide_index=True,
-    )
+    st.dataframe(accuracy_view[display_columns], use_container_width=True, hide_index=True)
 
     if "mae" in accuracy_view.columns and accuracy_view["mae"].notna().any():
         chart_df = accuracy_view.dropna(subset=["mae"]).sort_values("mae")
@@ -1676,36 +1657,24 @@ else:
         fig_accuracy.add_trace(go.Bar(
             x=chart_df["method_name"],
             y=chart_df["mae"],
-            marker_color=[
-                "#0f9d58" if selected else "#1a73e8"
-                for selected in chart_df["selected_winner"]
-            ],
+            marker_color=["#0f9d58" if selected else "#1a73e8" for selected in chart_df["selected_winner"]],
             text=[f"{value:.3f}" for value in chart_df["mae"]],
             textposition="outside",
             cliponaxis=False,
             hovertemplate="<b>%{x}</b><br>MAE: %{y:.3f}<extra></extra>",
         ))
         fig_accuracy.update_layout(
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-            height=300,
-            margin=dict(l=60, r=20, t=20, b=60),
-            xaxis=dict(
-                title=dict(text="Model", font=dict(color="#5f6368", size=11)),
-                tickfont=dict(color="#5f6368", size=11),
-                showgrid=False,
-            ),
-            yaxis=dict(
-                title=dict(text="MAE (lower is better)", font=dict(color="#5f6368", size=11)),
-                tickfont=dict(color="#5f6368", size=11),
-                showgrid=True,
-                gridcolor="#f1f3f4",
-                range=[0, chart_df["mae"].max() * 1.25],
-            ),
+            plot_bgcolor="white", paper_bgcolor="white",
+            height=300, margin=dict(l=60, r=20, t=20, b=60),
+            xaxis=dict(title=dict(text="Model", font=dict(color="#5f6368", size=11)),
+                       tickfont=dict(color="#5f6368", size=11), showgrid=False),
+            yaxis=dict(title=dict(text="MAE (lower is better)", font=dict(color="#5f6368", size=11)),
+                       tickfont=dict(color="#5f6368", size=11), showgrid=True, gridcolor="#f1f3f4",
+                       range=[0, chart_df["mae"].max() * 1.25]),
             showlegend=False,
             font=dict(color="#202124", family="Google Sans, Roboto"),
         )
-        st.plotly_chart(fig_accuracy, width="stretch")
+        st.plotly_chart(fig_accuracy, use_container_width=True)
 
     st.caption(f"Accuracy source: {model_accuracy_source}")
 
@@ -1719,6 +1688,8 @@ st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=
 
 col_best, col_worst = st.columns(2)
 
+
+# THE ISSUE WAS HERE! SOMEONE INDENTED THIS THING AND THE ENTIRE THING COLLAPSED!
 with col_best:
     st.markdown("""
         <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
@@ -1734,196 +1705,288 @@ with col_best:
         </div>
     """, unsafe_allow_html=True)
 
-    fig_trend = go.Figure()
-    for i, cat in enumerate(category_sales['category'].tolist()):
-        cat_data = category_monthly[category_monthly['category'] == cat]
-        fig_trend.add_trace(go.Scatter(
-            x=cat_data['period'], y=cat_data['sales'],
-            mode='lines', name=cat,
-            line=dict(color=category_colors[i % len(category_colors)], width=2),
-            hovertemplate=f'<b>{cat}</b><br>%{{x}}<br>Revenue: $%{{y:,.0f}}<extra></extra>'
-        ))
-
-    fig_trend.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white',
-        height=300, margin=dict(l=60, r=20, t=16, b=50),
-        xaxis=dict(
-            showgrid=True, gridcolor='#f1f3f4',
-            tickfont=dict(color='#5f6368', size=10),
-            title=dict(text="Month", font=dict(color='#5f6368', size=11))
-        ),
-        yaxis=dict(
-            showgrid=True, gridcolor='#f1f3f4',
-            tickfont=dict(color='#5f6368', size=11), tickformat='$,.0f',
-            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11))
-        ),
-        hoverlabel=dict(align="left"),
-        legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5,
-                    font=dict(color='#5f6368', size=10)),
-        hovermode='x unified',
-        font=dict(color='#202124', family='Google Sans, Roboto')
-    )
-
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-    st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
-
-    # ── Category Breakdown ────────────────────────────────────────────────────
-    # Two charts side by side answering different but complementary questions:
-    #   Bar chart  → "How much revenue does each category generate?" (absolute $)
-    #   Donut chart → "What share of total revenue does each category represent?" (%)
-    # Together they give a complete picture of category performance.
-    # Both update with store/category filters.
-
-    col_bar, col_pie = st.columns(2)
-
-    with col_bar:
-        st.markdown("""
-            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                        border-radius: 0; border: 1px solid #e0e0e0;
-                        border-bottom: none; border-top: 3px solid #0f9d58;'>
-                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                    Revenue by Category
-                </p>
-                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                    Total revenue generated per category
-                </p>
+    for i, row in top5.iterrows():
+        rank = i + 1
+        st.markdown(f"""
+            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #f1f3f4;
+                        display: flex; justify-content: space-between; align-items: center;'>
+                <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                    <span style='background-color: #e6f4ea; color: #0b8043;
+                                 font-size: 0.7rem; font-weight: 600;
+                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                 display: inline-flex; align-items: center; justify-content: center;'>
+                        {rank}
+                    </span>
+                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                        {row['product']}
+                    </span>
+                </div>
+                <span style='color: #0b8043; font-size: 0.875rem; font-weight: 500;'>
+                    ${row['total_sales']:,.0f}
+                </span>
             </div>
         """, unsafe_allow_html=True)
 
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            x=category_sales['category'],
-            y=category_sales['total_sales'],
-            marker_color=category_colors[:len(category_sales)],
-            # Labels shown on/above each bar so small bars are still readable
-            text=[f"${v:,.0f}" for v in category_sales['total_sales']],
-            textposition='auto',   # Plotly decides inside vs outside per bar
-            cliponaxis=False,      # Prevents labels from being cut off at chart edge
-            textfont=dict(size=10, color='#202124'),
-            hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
-        ))
+    # Bottom border to close the card visually
+    st.markdown("""
+        <div style='background-color: #ffffff; height: 0.75rem;
+                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                    border-bottom: 1px solid #e0e0e0;'>
+        </div>
+    """, unsafe_allow_html=True)
 
-        fig_bar.update_layout(
-            plot_bgcolor='white', paper_bgcolor='white',
-            height=360, margin=dict(l=60, r=20, t=16, b=50),
-            xaxis=dict(
-                showgrid=False,
-                tickfont=dict(color='#5f6368', size=11),
-                showline=True, linecolor='#e0e0e0'
-            ),
-            yaxis=dict(
-                showgrid=True, gridcolor='#f1f3f4',
-                title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
-                tickfont=dict(color='#5f6368', size=11),
-                tickformat='$,.0f',
-                # 25% headroom above tallest bar so outside labels are never clipped
-                range=[0, category_sales['total_sales'].max() * 1.25]
-            ),
-            hoverlabel=dict(
-                align="left"
-            ),
-            showlegend=False,
-            font=dict(color='#202124', family='Google Sans, Roboto')
-        )
+with col_worst:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-top: 3px solid #d93025; border-bottom: none;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Underperformers
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Products generating the least revenue
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    with col_pie:
-        st.markdown("""
-            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                        border-radius: 0; border: 1px solid #e0e0e0;
-                        border-bottom: none; border-top: 3px solid #1a73e8;'>
-                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                    Revenue Share
-                </p>
-                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                    Each category as a % of total revenue
-                </p>
+    for i, row in bottom5.iterrows():
+        rank = i + 1
+        st.markdown(f"""
+            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #f1f3f4;
+                        display: flex; justify-content: space-between; align-items: center;'>
+                <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                    <span style='background-color: #fce8e6; color: #d93025;
+                                 font-size: 0.7rem; font-weight: 600;
+                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                 display: inline-flex; align-items: center; justify-content: center;'>
+                        {rank}
+                    </span>
+                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                        {row['product']}
+                    </span>
+                </div>
+                <span style='color: #d93025; font-size: 0.875rem; font-weight: 500;'>
+                    ${row['total_sales']:,.0f}
+                </span>
             </div>
         """, unsafe_allow_html=True)
 
-        fig_pie = go.Figure()
-        fig_pie.add_trace(go.Pie(
-            labels=category_sales['category'],
-            values=category_sales['total_sales'],
-            marker=dict(colors=category_colors[:len(category_sales)]),
-            hole=0.4,  # Donut style — cleaner and more modern than a full pie
-            hovertemplate='<b>%{label}</b><br>Revenue: $%{value:,.0f}<br>Share: %{percent}<extra></extra>'
-        ))
+    st.markdown("""
+        <div style='background-color: #ffffff; height: 0.75rem;
+                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                    border-bottom: 1px solid #e0e0e0;'>
+        </div>
+    """, unsafe_allow_html=True)
 
-        fig_pie.update_layout(
-            plot_bgcolor='white', paper_bgcolor='white',
-            height=360, margin=dict(l=20, r=20, t=16, b=50),
-            legend=dict(
-                orientation="h", yanchor="top", y=-0.15,
-                xanchor="center", x=0.5,
-                font=dict(color='#5f6368', size=10)
-            ),
-            hoverlabel=dict(
-                align="left"
-            ),
-            font=dict(color='#202124', family='Google Sans, Roboto')
-        )
+# ── Category Breakdown ────────────────────────────────────────────────────────
+# Two charts side by side answering different but complementary questions:
+#   Bar chart  → "How much revenue does each category generate?" (absolute $)
+#   Donut chart → "What share of total revenue does each category represent?" (%)
+# Together they give a complete picture of category performance.
+# Both update with store/category filters.
 
-        st.plotly_chart(fig_pie, use_container_width=True)
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
 
-    # Andrew Garcia Leopold: Store Breakdown / Store Comparison.
-    # This shows stores side by side using total sales from the filtered data.
-    # It supports the Segment Analysis task by making store performance easy to compare.
-    st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+# ── Category trend line ───────────────────────────────────────────────────────
+# One line per category showing monthly revenue over time.
+# Lets the manager see which categories are growing vs declining.
 
+st.markdown("""
+    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                border-radius: 0; border: 1px solid #e0e0e0;
+                border-bottom: none; border-top: 3px solid #0f9d58;'>
+        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+            Category Revenue Trends
+        </p>
+        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+            Monthly revenue per category — see which are growing or declining
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+fig_trend = go.Figure()
+for i, cat in enumerate(category_sales['category'].tolist()):
+    cat_data = category_monthly[category_monthly['category'] == cat]
+    fig_trend.add_trace(go.Scatter(
+        x=cat_data['period'], y=cat_data['sales'],
+        mode='lines', name=cat,
+        line=dict(color=category_colors[i % len(category_colors)], width=2),
+        hovertemplate=f'<b>{cat}</b><br>%{{x}}<br>Revenue: $%{{y:,.0f}}<extra></extra>'
+    ))
+
+fig_trend.update_layout(
+    plot_bgcolor='white', paper_bgcolor='white',
+    height=300, margin=dict(l=60, r=20, t=16, b=50),
+    xaxis=dict(
+        showgrid=True, gridcolor='#f1f3f4',
+        tickfont=dict(color='#5f6368', size=10),
+        title=dict(text="Month", font=dict(color='#5f6368', size=11))
+    ),
+    yaxis=dict(
+        showgrid=True, gridcolor='#f1f3f4',
+        tickfont=dict(color='#5f6368', size=11), tickformat='$,.0f',
+        title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11))
+    ),
+    hoverlabel=dict(align="left"),
+    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5,
+                font=dict(color='#5f6368', size=10)),
+    hovermode='x unified',
+    font=dict(color='#202124', family='Google Sans, Roboto')
+)
+
+st.plotly_chart(fig_trend, use_container_width=True)
+
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+col_bar, col_pie = st.columns(2)
+
+with col_bar:
     st.markdown("""
         <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
                     border-radius: 0; border: 1px solid #e0e0e0;
                     border-bottom: none; border-top: 3px solid #0f9d58;'>
             <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
                       text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                Store Comparison
+                Revenue by Category
             </p>
             <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                Total revenue by store for the selected filters
+                Total revenue generated per category
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-    fig_store = go.Figure()
-    fig_store.add_trace(go.Bar(
-        x=store_sales['store_id'].astype(str),
-        y=store_sales['total_sales'],
-        # Made it so that the colors on the store comparison will differ for each store
-        # With the number of colors being the number of stores in the filtered data.
-        marker_color=category_colors[:len(store_sales)],
-        text=[f"${v:,.0f}" for v in store_sales['total_sales']],
-        textposition='auto',
-        cliponaxis=False,
+    fig_bar = go.Figure()
+    fig_bar.add_trace(go.Bar(
+        x=category_sales['category'],
+        y=category_sales['total_sales'],
+        marker_color=category_colors[:len(category_sales)],
+        # Labels shown on/above each bar so small bars are still readable
+        text=[f"${v:,.0f}" for v in category_sales['total_sales']],
+        textposition='auto',   # Plotly decides inside vs outside per bar
+        cliponaxis=False,      # Prevents labels from being cut off at chart edge
         textfont=dict(size=10, color='#202124'),
-        hovertemplate='<b>Store %{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+        hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
     ))
 
-    fig_store.update_layout(
+    fig_bar.update_layout(
         plot_bgcolor='white', paper_bgcolor='white',
         height=360, margin=dict(l=60, r=20, t=16, b=50),
         xaxis=dict(
-            title=dict(text="Store ID", font=dict(color='#5f6368', size=11)),
             showgrid=False,
             tickfont=dict(color='#5f6368', size=11),
             showline=True, linecolor='#e0e0e0'
         ),
         yaxis=dict(
-            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
             showgrid=True, gridcolor='#f1f3f4',
+            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
             tickfont=dict(color='#5f6368', size=11),
             tickformat='$,.0f',
-            range=[0, store_sales['total_sales'].max() * 1.25]
+            # 25% headroom above tallest bar so outside labels are never clipped
+            range=[0, category_sales['total_sales'].max() * 1.25]
         ),
-        hoverlabel=dict(
-            align="left"
-        ),
+        hoverlabel=dict(align="left"),
         showlegend=False,
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_store, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+with col_pie:
+    st.markdown("""
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-bottom: none; border-top: 3px solid #1a73e8;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                Revenue Share
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Each category as a % of total revenue
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fig_pie = go.Figure()
+    fig_pie.add_trace(go.Pie(
+        labels=category_sales['category'],
+        values=category_sales['total_sales'],
+        marker=dict(colors=category_colors[:len(category_sales)]),
+        hole=0.4,  # Donut style — cleaner and more modern than a full pie
+        hovertemplate='<b>%{label}</b><br>Revenue: $%{value:,.0f}<br>Share: %{percent}<extra></extra>'
+    ))
+
+    fig_pie.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        height=360, margin=dict(l=20, r=20, t=16, b=50),
+        legend=dict(
+            orientation="h", yanchor="top", y=-0.15,
+            xanchor="center", x=0.5,
+            font=dict(color='#5f6368', size=10)
+        ),
+        hoverlabel=dict(align="left"),
+        font=dict(color='#202124', family='Google Sans, Roboto')
+    )
+
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+# Andrew Garcia Leopold: Store Breakdown / Store Comparison.
+# This shows stores side by side using total sales from the filtered data.
+# It supports the Segment Analysis task by making store performance easy to compare.
+st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+st.markdown("""
+    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                border-radius: 0; border: 1px solid #e0e0e0;
+                border-bottom: none; border-top: 3px solid #0f9d58;'>
+        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+            Store Comparison
+        </p>
+        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+            Total revenue by store for the selected filters
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+fig_store = go.Figure()
+fig_store.add_trace(go.Bar(
+    x=store_sales['store_id'].astype(str),
+    y=store_sales['total_sales'],
+    # Made it so that the colors on the store comparison will differ for each store
+    # With the number of colors being the number of stores in the filtered data.
+    marker_color=category_colors[:len(store_sales)],
+    text=[f"${v:,.0f}" for v in store_sales['total_sales']],
+    textposition='auto',
+    cliponaxis=False,
+    textfont=dict(size=10, color='#202124'),
+    hovertemplate='<b>Store %{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+))
+
+fig_store.update_layout(
+    plot_bgcolor='white', paper_bgcolor='white',
+    height=360, margin=dict(l=60, r=20, t=16, b=50),
+    xaxis=dict(
+        title=dict(text="Store ID", font=dict(color='#5f6368', size=11)),
+        showgrid=False,
+        tickfont=dict(color='#5f6368', size=11),
+        showline=True, linecolor='#e0e0e0'
+    ),
+    yaxis=dict(
+        title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+        showgrid=True, gridcolor='#f1f3f4',
+        tickfont=dict(color='#5f6368', size=11),
+        tickformat='$,.0f',
+        range=[0, store_sales['total_sales'].max() * 1.25]
+    ),
+    hoverlabel=dict(align="left"),
+    showlegend=False,
+    font=dict(color='#202124', family='Google Sans, Roboto')
+)
+
+st.plotly_chart(fig_store, use_container_width=True)
