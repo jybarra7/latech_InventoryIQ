@@ -13,16 +13,20 @@ load_dotenv()
 def get_gemini_client():
     """Create the Gemini client only when a key is available."""
     api_key = os.getenv("GEMINI_API_KEY")
+    
     if not api_key:
         return None, "GEMINI_API_KEY is not set."
+        
     if genai is None:
         return None, "google-genai is not installed."
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel("gemini-1.5-flash"), None
+        
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-1.5-flash"), None
 
 # -------------------------------
-# 1. BUILD AI PAYLOAD (YOUR PART)
+# 1. BUILD AI PAYLOAD
 # -------------------------------
+
 def build_payload(trend, model_name, accuracy, alerts_df, top_product=None, top_category=None):
     """
     Andrew Garcia Leopold: build the exact payload shape app.py expects.
@@ -64,7 +68,7 @@ def build_ai_payload(df):
         "avg_sales": float(df["sales"].mean()),
         "max_sales": float(df["sales"].max()),
         "min_sales": float(df["sales"].min()),
-        "data_points": len(df)
+        "data_points": len(df),
         "top_product": top_product,
         "top_category": top_category,
     }
@@ -113,7 +117,7 @@ If a top product is provided, include it naturally in the summary.
 Use plain, direct language suitable for a store manager. Avoid repeating raw metric values unless necessary.
         """
 
-    response = client.generate_content(prompt)
+        response = client.generate_content(prompt)
 
 
         return {
