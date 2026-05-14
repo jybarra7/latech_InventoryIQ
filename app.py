@@ -7,16 +7,14 @@ Purpose:  The single Streamlit app file that wires together every team
             - Loads and normalizes retail sales data (Andrew's processor)
             - Loads Alberto's LightGBM forecast predictions
             - Runs James's alert engine on the filtered dataset
-            - Renders all charts, KPIs, and panels
+            - Renders all charts, KPIs, and panels across four tabs
             - Calls Sarah's Gemini AI summary with real dashboard data
 
 Team modules consumed:
-    models/alerter.py     → James  — anomaly + demand decline detection
-    utils/processor.py    → Andrew — CSV normalization + feature flags
-    utils/ai_summary.py   → Sarah  — Gemini AI summary generation
+    models/alerter.py        → James  — anomaly + demand decline detection
+    utils/processor.py       → Andrew — CSV normalization + feature flags
+    utils/ai_summary.py      → Sarah  — Gemini AI summary generation
     data/forecastUpdated.csv → Alberto — LightGBM predictions for 2018
-
-Run with: streamlit run app.py
 """
 
 import streamlit as st
@@ -266,9 +264,7 @@ st.markdown("""
         overflow: visible !important;
     }
 
-    [data-testid="stFileUploader"] small button::after {
-        content: none !important;
-    }
+    [data-testid="stFileUploader"] small button::after { content: none !important; }
 
     [data-testid="stFileUploader"] small button svg,
     [data-testid="stFileUploader"] small button svg *,
@@ -759,6 +755,97 @@ if current_upload != st.session_state.last_upload:
     st.session_state.reset_counter = st.session_state.get('reset_counter', 0) + 1
     st.rerun()
 
+# ── Intro overlay ─────────────────────────────────────────────────────────────
+# FR-35: First thing a first-time user sees — replaces the entire page content.
+# Uses st.empty() so clicking Get Started clears it and reveals the dashboard.
+# Never shows again for the rest of the session.
+
+if 'show_intro' not in st.session_state:
+    st.session_state.show_intro = True
+
+if st.session_state.show_intro:
+    intro = st.empty()
+    with intro.container():
+        st.markdown("""
+            <style>
+            [data-testid="stSidebar"] { display: none !important; }
+            [data-testid="collapsedControl"] { display: none !important; }
+            .main .block-container { padding-left: 1.5rem !important; }
+            body { overflow: hidden !important; }
+
+            /* Hide the real Streamlit button visually but keep it clickable */
+            div[data-testid="stButton"] > button {
+                position: fixed !important;
+                bottom: calc(50vh - 340px) !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                z-index: 99999 !important;
+                background-color: #0f9d58 !important;
+                color: #ffffff !important;
+                border: none !important;
+                border-radius: 4px !important;
+                padding: 0.6rem 2rem !important;
+                font-size: 0.9rem !important;
+                font-weight: 500 !important;
+                width: auto !important;
+                min-width: 200px !important;
+                cursor: pointer !important;
+            }
+
+            div[data-testid="stButton"] > button:hover {
+                background-color: #0b8043 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+            <div style='min-height: 100vh; display: flex; align-items: center;
+                        justify-content: center; padding: 2rem;
+                        position: fixed; top: 0; left: 0; width: 100vw;
+                        background-color: #f3f3f3; z-index: 9999;'>
+                <div style='background-color: #ffffff; border-top: 4px solid #0f9d58;
+                            border: 1px solid #e0e0e0; border-top: 4px solid #0f9d58;
+                            padding: 2rem; max-width: 600px; width: 100%;
+                            box-shadow: 0 4px 24px rgba(0,0,0,0.08);'>
+                    <p style='color: #0f9d58; font-size: 0.72rem; font-weight: 600;
+                              text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 1rem 0;'>
+                        LA Tech Rising · AI-Powered Retail
+                    </p>
+                    <h1 style='color: #202124; font-size: 1.75rem; font-weight: 500;
+                               margin: 0 0 0.75rem 0; line-height: 1.3;'>
+                        Welcome to the Retail Forecasting Engine
+                    </h1>
+                    <p style='color: #5f6368; font-size: 0.875rem; margin: 0 0 0.5rem 0;'>
+                        Built by the LA Tech Rising team · Powered by Gemini AI
+                    </p>
+                    <p style='color: #3c4043; font-size: 0.9rem; line-height: 1.7;
+                              margin: 0 0 1rem 0; padding-top: 0.75rem;
+                              border-top: 1px solid #f1f3f4;'>
+                        This dashboard turns raw retail sales data into actionable insights —
+                        demand forecasts, risk alerts, and AI-generated summaries — all in one place.
+                        No technical knowledge required.
+                    </p>
+                    <div style='background-color: #f8f9fa; border-radius: 4px;
+                                padding: 1rem 1.25rem; margin-bottom: 0;'>
+                        <p style='color: #3c4043; font-size: 0.85rem; line-height: 2.2; margin: 0;'>
+                            📂 <b>Upload your data</b> in the sidebar, or explore the benchmark dataset<br>
+                            🔍 <b>Filter</b> by store, category, or region to focus your analysis<br>
+                            ✦ <b>Generate Summary</b> for an AI-written overview of what needs attention<br>
+                            📊 <b>Switch tabs</b> to explore forecasts, products, and analysis
+                        </p>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        col_l, col_btn, col_r = st.columns([1, 1, 1])
+        with col_btn:
+            if st.button("✦ Get Started →", use_container_width=True):
+                st.session_state.show_intro = False
+                intro.empty()
+                st.rerun()
+    st.stop()
+
 # ── Page title ───────────────────────────────────────────────────────────────
 # Placed AFTER data loading so dataset_label can reference data_source
 # and current_upload which are now defined.
@@ -773,7 +860,7 @@ else:
     dataset_label = "Benchmark dataset loaded"
 
 st.markdown(f"""
-    <div style='margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e0e0e0;'>
+    <div style='margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e0e0e0;'>
         <h1 style='font-size: 1.5rem; font-weight: 500; color: #202124; margin: 0;'>
             Sales Forecasting Dashboard
         </h1>
@@ -782,57 +869,6 @@ st.markdown(f"""
         </p>
     </div>
 """, unsafe_allow_html=True)
-
-# ── Intro banner ──────────────────────────────────────────────────────────────
-# FR-35: First thing a first-time user sees before interacting with the dashboard.
-# Dismissed by clicking the X button — hidden for the rest of the session.
-
-if 'show_intro' not in st.session_state:
-    st.session_state.show_intro = True
-
-if st.session_state.show_intro:
-    st.markdown("""
-        <div style='background-color: #ffffff; border-left: 4px solid #0f9d58;
-                    border: 1px solid #e0e0e0; border-left: 4px solid #0f9d58;
-                    padding: 1.5rem 2rem; margin-bottom: 1.5rem;'>
-            <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
-                <div>
-                    <p style='color: #0f9d58; font-size: 0.72rem; font-weight: 600;
-                              text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.4rem 0;'>
-                        LA Tech Rising · AI-Powered Retail
-                    </p>
-                    <h2 style='color: #202124; font-size: 1.2rem; font-weight: 500; margin: 0 0 0.5rem 0;'>
-                        Welcome to the Retail Forecasting Engine
-                    </h2>
-                    <p style='color: #3c4043; font-size: 0.875rem; line-height: 1.6; margin: 0 0 1rem 0;'>
-                        This dashboard turns raw retail sales data into actionable insights —
-                        demand forecasts, risk alerts, and AI-generated summaries — all in one place.
-                        No technical knowledge required.
-                    </p>
-                    <div style='display: flex; gap: 2rem;'>
-                        <span style='color: #5f6368; font-size: 0.8rem;'>
-                            📂 <b>Upload your data</b> in the sidebar
-                        </span>
-                        <span style='color: #5f6368; font-size: 0.8rem;'>
-                            🔍 <b>Filter</b> by store, category, or region
-                        </span>
-                        <span style='color: #5f6368; font-size: 0.8rem;'>
-                            ✦ <b>Generate Summary</b> for AI insights
-                        </span>
-                        <span style='color: #5f6368; font-size: 0.8rem;'>
-                            📊 <b>Switch tabs</b> to explore performance
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    col_dismiss, _ = st.columns([1, 5])
-    with col_dismiss:
-        if st.button("✕ Dismiss", use_container_width=True):
-            st.session_state.show_intro = False
-            st.rerun()
 
 if upload_warning_message:
     st.markdown(f"""
@@ -860,16 +896,16 @@ st.sidebar.markdown("""
 # Optional features are extra columns that turn extra dashboard features on/off.
 # Green means the field is available. Red means the related feature should stay inactive.
 green_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#0f9d58; margin-right:0.35rem;'></span>"
-red_dot = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#d93025; margin-right:0.35rem;'></span>"
+red_dot   = "<span style='display:inline-block; width:0.7rem; height:0.7rem; border-radius:50%; background-color:#d93025; margin-right:0.35rem;'></span>"
 
-date_dot = green_dot if "date" in df.columns else red_dot
-sales_dot = green_dot if "sales" in df.columns else red_dot
-store_dot = green_dot if "store_id" in df.columns else red_dot
-product_dot = green_dot if "product_id" in df.columns else red_dot
-category_dot = green_dot if "category" in df.columns else red_dot
-quantity_dot = green_dot if "quantity" in df.columns else red_dot
-profit_dot = green_dot if "profit" in df.columns else red_dot
-region_dot = green_dot if "region" in df.columns else red_dot
+date_dot        = green_dot if "date"              in df.columns else red_dot
+sales_dot       = green_dot if "sales"             in df.columns else red_dot
+store_dot       = green_dot if "store_id"          in df.columns else red_dot
+product_dot     = green_dot if "product_id"        in df.columns else red_dot
+category_dot    = green_dot if "category"          in df.columns else red_dot
+quantity_dot    = green_dot if "quantity"          in df.columns else red_dot
+profit_dot      = green_dot if "profit"            in df.columns else red_dot
+region_dot      = green_dot if "region"            in df.columns else red_dot
 transaction_dot = green_dot if "transaction_count" in df.columns else red_dot
 
 st.sidebar.markdown(f"""
@@ -933,7 +969,7 @@ if 'reset_counter' not in st.session_state:
 # Date range always covers all available data — the forecast horizon slider
 # controls how far the orange projection line extends, not the date range.
 start_date = df['date'].min()
-end_date = df['date'].max()
+end_date   = df['date'].max()
 
 # Forecast horizon — controls how many months of predictions are shown
 # on the chart and summed in the Projected Revenue KPI card.
@@ -1040,13 +1076,12 @@ alerts_df = run_all_alerts(df_filtered, thresholds={
 })
 
 # Andrew Garcia Leopold: feature_flags should affect behavior, not just sidebar dots.
-# If profit is missing, margin alerts cannot be calculated, so hide them and explain why.
+# If profit is missing, margin alerts cannot be calculated, so hide them silently.
 profit_data_available = "profit" in df_filtered.columns
-margin_alert_notice = ""
+margin_alert_notice   = ""
 
 if not profit_data_available:
     margin_alert_notice = "Profit data is missing, so margin alerts are hidden for this dataset."
-
     # Safety guard: James's alerter already skips margin alerts without profit,
     # but this keeps the dashboard correct if alert data changes later.
     if not alerts_df.empty and "alert_type" in alerts_df.columns:
@@ -1117,7 +1152,7 @@ df_chart['period'] = df_chart['period'].astype(str)
 # Drop the last month if it's incomplete (less than 90% of days present).
 # This prevents a misleading dip at the end of the historical line when the
 # dataset cuts off mid-month (e.g. December showing $625k instead of $928k).
-last_month_date = df_filtered['date'].max()
+last_month_date    = df_filtered['date'].max()
 days_in_last_month = pd.Period(last_month_date, 'M').days_in_month
 days_present = df_filtered[
     df_filtered['date'].dt.to_period('M') == pd.Period(last_month_date, 'M')
@@ -1126,8 +1161,8 @@ if days_present < days_in_last_month * 0.9:
     df_chart = df_chart.iloc[:-1]
 
 last_period_dt = df_filtered['date'].max()
-last_value = df_chart['sales'].iloc[-1]
-months_ahead = max(1, projection_days // 30)
+last_value     = df_chart['sales'].iloc[-1]
+months_ahead   = max(1, projection_days // 30)
 
 if forecasts_df is not None:
     # Filter Alberto's predictions to only dates AFTER the historical data ends.
@@ -1138,21 +1173,21 @@ if forecasts_df is not None:
     if len(fc) > 0:
         # Aggregate daily per-store/item predictions into monthly totals
         # to match the scale of the historical monthly line
-        fc['period'] = fc['date'].dt.to_period('M').astype(str)
-        fc_monthly = fc.groupby('period')['prediction'].sum().reset_index()
-        fc_monthly = fc_monthly.sort_values('period').head(months_ahead)
+        fc['period']   = fc['date'].dt.to_period('M').astype(str)
+        fc_monthly     = fc.groupby('period')['prediction'].sum().reset_index()
+        fc_monthly     = fc_monthly.sort_values('period').head(months_ahead)
         forecast_periods = fc_monthly['period'].tolist()
         forecast_values  = fc_monthly['prediction'].tolist()
     else:
         # Alberto's data is older than the historical dataset — use growth formula
-        growth_per_day = (1.08 ** (1/365))
+        growth_per_day   = (1.08 ** (1/365))
         forecast_periods = [(last_period_dt + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(months_ahead)]
-        forecast_values  = [last_value * (growth_per_day ** (30 * (i+1))) for i in range(months_ahead)]
+        forecast_values  = [last_value * (growth_per_day ** (30*(i+1))) for i in range(months_ahead)]
 else:
     # Alberto's file not available at all — use growth formula as fallback
-    growth_per_day = (1.08 ** (1/365))
+    growth_per_day   = (1.08 ** (1/365))
     forecast_periods = [(last_period_dt + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(months_ahead)]
-    forecast_values  = [last_value * (growth_per_day ** (30 * (i+1))) for i in range(months_ahead)]
+    forecast_values  = [last_value * (growth_per_day ** (30*(i+1))) for i in range(months_ahead)]
 
 last_period = df_chart['period'].iloc[-1]
 
@@ -1208,785 +1243,1030 @@ category_colors = [
     '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'
 ]
 
-# ── AI Summary panel ──────────────────────────────────────────────────────────
-# Powered by Sarah's Gemini integration (utils/ai_summary.py).
-# The summary is cached in session_state so it doesn't re-run on every
-# filter change — only when the manager explicitly clicks Generate.
-# We pass real dashboard metrics so the AI writes something specific
-# to the current data, not a generic retail summary.
+# ── AI Summary state ──────────────────────────────────────────────────────────
+# Initialize AI summary cache in session state on first load.
 
-st.markdown("""
-    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
-                border-radius: 0; border: 1px solid #e0e0e0;
-                border-top: 3px solid #1a73e8; margin-bottom: 1.5rem;'>
-        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-            AI Insights
-        </p>
-        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-            Generate a plain-English summary of your current data
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-
-# Initialize AI summary cache in session state on first load
 if 'ai_summary' not in st.session_state:
     st.session_state.ai_summary = None
 
-col_ai_btn = st.columns([1, 5])[0]
+# ── TABS — placed immediately after page title as primary navigation ──────────
+# Tab 1: Overview  — AI summary, KPIs, forecast chart, alerts
+# Tab 2: Products  — Top/bottom sellers
+# Tab 3: Analysis  — Category trends, charts, store comparison
+# Tab 4: Model     — Alberto's model accuracy benchmarking
+# 
 
-with col_ai_btn:
-    generate_clicked = st.button("✦ Generate Summary")
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🏆 Products", "📈 Analysis", "🤖 Model"])
 
-# Deleted the Clear button to simplify the interface. Also
-# it is no longer needed — st.session_state.ai_summary is set to None
-# when filter resets since it does not show up anymore.
+# TAB 1 — OVERVIEW
+# Answers: How is the business doing right now?
 
-if generate_clicked:
-    with st.spinner("Analyzing your data..."):
-        # Build the payload from real dashboard data to pass to Sarah's function.
-        # We gather: total revenue, trend, alert count, top product,
-        # top category, projected revenue, and top 3 alert product names.
-        total_sales_val  = df_filtered["sales"].sum()
-        top_product_name = top5.iloc[0]['product'] if len(top5) > 0 else "N/A"
-        top_category_name = category_sales.iloc[0]['category'] if len(category_sales) > 0 else "N/A"
-        projected_val    = sum(forecast_values) if forecast_values else None
-        # Andrew Garcia Leopold: support either alert column name so AI testing
-        # does not break the dashboard if another teammate uses "product".
-        alert_product_column = (
-            "product_name" if "product_name" in alerts_df.columns
-            else "product" if "product" in alerts_df.columns
-            else None
-        )
-        top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
+with tab1:
 
-        # OLD TEST FUNCTION (kept for reference, no longer used)
-        # result = test_gemini(...)
+    # ── AI Summary panel ──────────────────────────────────────────────────────
+    # Powered by Sarah's Gemini integration (utils/ai_summary.py).
+    # The summary is cached in session_state so it doesn't re-run on every
+    # filter change — only when the manager explicitly clicks Generate.
+    # We pass real dashboard metrics so the AI writes something specific
+    # to the current data, not a generic retail summary.
 
-        # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
-        # The Alert Center below still needs the original product_name column.
-        ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
-
-        # Build payload for Gemini (new structured approach)
-        payload = build_payload(
-            trend=trend_label,
-            model_name=method_used if method_used else "Unknown Model",
-            accuracy=mae if mae else "not available",
-            alerts_df=ai_alerts_df
-        )
-
-        # Generate summary using Gemini
-        result = generate_summary(payload)
-
-        if result["status"] == "success":
-            st.session_state.ai_summary = result["text"]
-        else:
-            st.session_state.ai_summary = None
-            st.markdown(f"""
-                <div style='background-color: #fce8e6; border-left: 4px solid #d93025;
-                            padding: 1rem 1.25rem; border-radius: 4px; color: #202124;
-                            margin-bottom: 1rem;'>
-                    ⚠️ Could not generate summary — {result["message"]}
-                </div>
-            """, unsafe_allow_html=True)
-
-# Display the cached AI summary if one exists
-if st.session_state.ai_summary:
-    st.markdown(f"""
-        <div style='background-color: #e8f0fe; border-left: 4px solid #1a73e8;
-                    padding: 1.25rem 1.5rem; border-radius: 4px;
-                    color: #202124; font-size: 0.9rem; line-height: 1.6;
-                    margin-bottom: 1.5rem;'>
-            {st.session_state.ai_summary}
-        </div>
-    """, unsafe_allow_html=True)
-
-# ── KPI metrics ───────────────────────────────────────────────────────────────
-# Four headline numbers answering the manager's most important questions:
-#   1. How much money are we making? (Total Revenue)
-#   2. Is the business growing or shrinking? (Sales Trend)
-#   3. Is anything broken? (Active Alerts)
-#   4. How much do we expect to make? (Projected Revenue)
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    total_sales = df_filtered["sales"].sum()
-    st.metric("Total Revenue", f"${total_sales:,.0f}", delta="All stores combined")
-
-with col2:
-    # Powered by the trend calculation above — green for up, red for down, gray for steady
-    st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
-
-# Changed the Active Alerts KPI to show a green border if all alerts are positive spikes,
-# and a red border if there are any negative alerts. This gives the manager an immediate visual
-# cue about whether the alerts are mostly good news or bad news.
-with col3:
-    alert_count = len(alerts_df)
-
-    if alert_count == 0:
-        delta_text = "No issues detected"
-        delta_color = "off"
-        bad_alerts = 0
-        good_alerts = 0
-    else:
-        # Split alerts into good (sales up) vs bad (sales down / margin)
-        good_alerts = 0
-        bad_alerts = 0
-        for _, alert in alerts_df.iterrows():
-            if alert['alert_type'] == "Sales Anomaly":
-                try:
-                    parts = alert['metric'].split()
-                    current = float(parts[2])
-                    mean = float(parts[-1])
-                    if current > mean:
-                        good_alerts += 1
-                    else:
-                        bad_alerts += 1
-                except:
-                    bad_alerts += 1
-            else:
-                bad_alerts += 1
-
-        if bad_alerts == 0:
-            # All alerts are positive spikes
-            delta_text = f"📈 {good_alerts} positive spike{'s' if good_alerts != 1 else ''} detected"
-            delta_color = "normal"
-        elif good_alerts == 0:
-            # All alerts are negative
-            delta_text = f"-⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
-            delta_color = "normal"  # changed to normal because a '-' to show negative arrow will inverse the color as well.
-        else:
-            # Mix of good and bad
-            delta_text = f"-📈 {good_alerts} up · 📉 {bad_alerts} need attention"
-            delta_color = "normal"
-
-    st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color)
-
-    # Only show red border if there are actually bad alerts
-    if alert_count > 0 and bad_alerts > 0:
-        st.markdown("""
-            <style>
-            [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
-            [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
-                border-top: 3px solid #d93025 !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-    elif alert_count > 0 and bad_alerts == 0:
-        # All good alerts — show green border instead
-        st.markdown("""
-            <style>
-            [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
-            [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
-                border-top: 3px solid #0f9d58 !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-with col4:
-    # Sums all forecast_values for the selected horizon — updates when
-    # the Forecast Horizon filter changes so the number matches the orange line.
-    if forecast_values:
-        projected_total = sum(forecast_values)
-        st.metric(
-            f"Projected Revenue ({projection_option})",
-            f"${projected_total:,.0f}",
-            delta="Based on forecast model"
-        )
-    else:
-        st.metric("Projected Revenue", "—", delta="No forecast available", delta_color="off")
-
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
-
-# ── Forecast chart + Alert panel ──────────────────────────────────────────────
-# Two-column layout: chart takes 2/3 width, alert panel takes 1/3.
-
-col_chart, col_alerts = st.columns([2, 1])
-
-with col_chart:
     st.markdown("""
-        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                    border-radius: 0; border: 1px solid #e0e0e0; 
-                    border-bottom: none; border-top: 3px solid #0f9d58;'>
-            <h3 style='margin: 0; color: #202124; font-size: 0.95rem; font-weight: 500;'>
-                Sales Forecast
-            </h3>
-            <p style='margin: 0.2rem 0 0 0; color: #5f6368; font-size: 0.8rem;'>
-                Historical performance vs. projected growth
+        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                    border-radius: 0; border: 1px solid #e0e0e0;
+                    border-top: 3px solid #1a73e8; margin-bottom: 1.25rem;'>
+            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                AI Insights
+            </p>
+            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                Generate a plain-English summary of your current data
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-    fig = go.Figure()
+    col_ai_btn = st.columns([1, 5])[0]
+    with col_ai_btn:
+        generate_clicked = st.button("✦ Generate Summary")
 
-    # Green solid line — actual historical sales from the uploaded/benchmark dataset
-    fig.add_trace(go.Scatter(
-        x=df_chart['period'], y=df_chart['sales'],
-        mode='lines+markers', name='Historical',
-        line=dict(color='#0f9d58', width=2.5),
-        marker=dict(size=6, color='#0f9d58'),
-        fill='tozeroy', fillcolor='rgba(15, 157, 88, 0.06)',
-        hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
-    ))
+    # Deleted the Clear button to simplify the interface. Also
+    # it is no longer needed — st.session_state.ai_summary is set to None
+    # when filter resets since it does not show up anymore.
 
-    # Orange dashed line — Alberto's LightGBM predictions (or fallback growth formula).
-    # Dashed style visually reinforces that this is a projection, not historical fact.
-    fig.add_trace(go.Scatter(
-        x=[last_period] + forecast_periods,
-        y=[last_value] + forecast_values,
-        mode='lines+markers', name='Projected',
-        line=dict(color='#f29900', width=2.5, dash='dash'),
-        marker=dict(size=6, color='#f29900'),
-        hovertemplate='<b>%{x}</b><br>Projected: $%{y:,.0f}<extra></extra>'
-    ))
+    if generate_clicked:
+        with st.spinner("Analyzing your data..."):
+            # Build the payload from real dashboard data to pass to Sarah's function.
+            # We gather: total revenue, trend, alert count, top product,
+            # top category, projected revenue, and top 3 alert product names.
+            total_sales_val   = df_filtered["sales"].sum()
+            top_product_name  = top5.iloc[0]['product'] if len(top5) > 0 else "N/A"
+            top_category_name = category_sales.iloc[0]['category'] if len(category_sales) > 0 else "N/A"
+            projected_val     = sum(forecast_values) if forecast_values else None
+            # Andrew Garcia Leopold: support either alert column name so AI testing
+            # does not break the dashboard if another teammate uses "product".
+            alert_product_column = (
+                "product_name" if "product_name" in alerts_df.columns
+                else "product" if "product" in alerts_df.columns
+                else None
+            )
+            top_alert_names = alerts_df[alert_product_column].head(3).tolist() if alert_product_column else []
 
-    # Vertical dotted line separating historical from projected — visual clarity for managers
-    fig.add_vline(x=last_period, line_dash="dot", line_color="#dadce0", line_width=1.5, opacity=0.8)
+            # OLD TEST FUNCTION (kept for reference, no longer used)
+            # result = test_gemini(...)
 
-    fig.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white', height=320,
-        margin=dict(l=60, r=20, t=16, b=50),
-        xaxis=dict(
-            showgrid=True, gridcolor='#f1f3f4',
-            title=dict(text="Month", font=dict(color='#5f6368', size=11)),
-            tickfont=dict(color='#5f6368', size=11),
-            showline=True, linecolor='#e0e0e0'
-        ),
-        yaxis=dict(
-            showgrid=True, gridcolor='#f1f3f4',
-            title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
-            tickfont=dict(color='#5f6368', size=11),
-            tickformat='$,.0f',
-            range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15]  # max(forecast_values) crashes on empty list bug fixed
-        ),
-        # I added this to every single fig.update_layout call to ensure that
-        # all charts will have their hover labels left-aligned instead of the random
-        # left and right sometimes.
-        hoverlabel=dict(align="left"),
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
-        hovermode='x unified',
-        font=dict(color='#202124', family='Google Sans, Roboto')
-    )
+            # Andrew Garcia Leopold: make an AI-only copy instead of renaming alerts_df.
+            # The Alert Center below still needs the original product_name column.
+            ai_alerts_df = alerts_df.rename(columns={"product_name": "product"})
 
-    st.plotly_chart(fig, use_container_width=True)
+            # Build payload for Gemini (new structured approach)
+            payload = build_payload(
+                trend      = trend_label,
+                model_name = method_used if method_used else "Unknown Model",
+                accuracy   = mae if mae else "not available",
+                alerts_df  = ai_alerts_df
+            )
 
-# ── Alert panel ───────────────────────────────────────────────────────────────
-# Powered by James's alerter. Each card shows:
-#   - Direction label (Sales Increasing / Sales Decreasing)
-#   - Product name
-#   - Estimated % change from normal range (derived from James's severity score)
-# Color coding: Green = sales spike up (good), Red = sales spike down (bad)
+            # Generate summary using Gemini
+            result = generate_summary(payload)
 
-with col_alerts:
-    if alerts_df.empty:
-        # All clear state: no flags in the filtered data.
-        st.markdown("""
-            <div style='background-color: #ffffff; padding: 1.25rem 1.5rem;
-                        border-radius: 0; border: 1px solid #e0e0e0;
-                        border-top: 3px solid #0f9d58; height: 100%;'>
-                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                          text-transform: uppercase; letter-spacing: 0.05em;
-                          margin: 0 0 1rem 0;'>Alert Center</p>
-                <div style='background-color: #e6f4ea; border-radius: 4px;
-                            padding: 1.25rem; text-align: center;'>
-                    <p style='color: #0b8043; font-weight: 500; font-size: 0.9rem; margin: 0;'>All Clear</p>
-                    <p style='color: #5f6368; font-size: 0.8rem; margin: 0.25rem 0 0 0;'>No issues detected</p>
-                </div>
+            if result["status"] == "success":
+                st.session_state.ai_summary = result["text"]
+            else:
+                st.session_state.ai_summary = None
+                st.markdown(f"""
+                    <div style='background-color: #fce8e6; border-left: 4px solid #d93025;
+                                padding: 1rem 1.25rem; border-radius: 4px; color: #202124;
+                                margin-bottom: 1rem;'>
+                        ⚠️ Could not generate summary — {result["message"]}
+                    </div>
+                """, unsafe_allow_html=True)
+
+    # Display the cached AI summary if one exists
+    if st.session_state.ai_summary:
+        st.markdown(f"""
+            <div style='background-color: #e8f0fe; border-left: 4px solid #1a73e8;
+                        padding: 1.25rem 1.5rem; border-radius: 4px;
+                        color: #202124; font-size: 0.9rem; line-height: 1.6;
+                        margin-bottom: 1.25rem;'>
+                {st.session_state.ai_summary}
             </div>
         """, unsafe_allow_html=True)
-    else:
-        # Browser-native details toggle: instant open/close without a Streamlit rerun.
-        alert_cards_html = ""
 
-        for _, alert in alerts_df.iterrows():
-            severity = float(alert['severity'])
-            pct = round((severity - 1) * 25)
+    # ── KPI metrics ───────────────────────────────────────────────────────────
+    # Four headline numbers answering the manager's most important questions:
+    #   1. How much money are we making? (Total Revenue)
+    #   2. Is the business growing or shrinking? (Sales Trend)
+    #   3. Is anything broken? (Active Alerts)
+    #   4. How much do we expect to make? (Projected Revenue)
 
-            if alert['alert_type'] == "Sales Anomaly":
-                try:
-                    parts = alert['metric'].split()
-                    current = float(parts[2])
-                    mean = float(parts[-1])
-                    is_up = current > mean
-                except:
-                    is_up = severity > 2.5
+    col1, col2, col3, col4 = st.columns(4)
 
-                if is_up:
-                    color = "#0b8043"; bg = "#e6f4ea"
-                    label = "📈 Sales Increasing"
-                    plain_metric = f"Up ~{pct}% above normal range"
+    with col1:
+        total_sales = df_filtered["sales"].sum()
+        st.metric("Total Revenue", f"${total_sales:,.0f}", delta="All stores combined")
+
+    with col2:
+        # Powered by the trend calculation above — green for up, red for down, gray for steady
+        st.metric("Sales Trend", trend_label, delta=trend_delta, delta_color=trend_color)
+
+    # Changed the Active Alerts KPI to show a green border if all alerts are positive spikes,
+    # and a red border if there are any negative alerts. This gives the manager an immediate visual
+    # cue about whether the alerts are mostly good news or bad news.
+    with col3:
+        alert_count = len(alerts_df)
+
+        if alert_count == 0:
+            delta_text        = "No issues detected"
+            delta_color_alert = "off"
+            bad_alerts        = 0
+            good_alerts       = 0
+        else:
+            # Split alerts into good (sales up) vs bad (sales down / margin)
+            good_alerts = 0
+            bad_alerts  = 0
+            for _, alert in alerts_df.iterrows():
+                if alert['alert_type'] == "Sales Anomaly":
+                    try:
+                        parts   = alert['metric'].split()
+                        current = float(parts[2])
+                        mean    = float(parts[-1])
+                        if current > mean:
+                            good_alerts += 1
+                        else:
+                            bad_alerts += 1
+                    except:
+                        bad_alerts += 1
                 else:
+                    bad_alerts += 1
+
+            if bad_alerts == 0:
+                # All alerts are positive spikes
+                delta_text        = f"📈 {good_alerts} positive spike{'s' if good_alerts != 1 else ''} detected"
+                delta_color_alert = "normal"
+            elif good_alerts == 0:
+                # All alerts are negative
+                delta_text        = f"-⚠️ {bad_alerts} item{'s' if bad_alerts != 1 else ''} need your attention"
+                delta_color_alert = "normal"  # changed to normal because a '-' to show negative arrow will inverse the color as well.
+            else:
+                # Mix of good and bad
+                delta_text        = f"-📈 {good_alerts} up · 📉 {bad_alerts} need attention"
+                delta_color_alert = "normal"
+
+        st.metric("Active Alerts", alert_count, delta=delta_text, delta_color=delta_color_alert)
+
+        # Only show red border if there are actually bad alerts
+        if alert_count > 0 and bad_alerts > 0:
+            st.markdown("""
+                <style>
+                [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
+                [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+                    border-top: 3px solid #d93025 !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+        elif alert_count > 0 and bad_alerts == 0:
+            # All good alerts — show green border instead
+            st.markdown("""
+                <style>
+                [data-testid="column"]:nth-child(3) div[data-testid="stVerticalBlock"],
+                [data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+                    border-top: 3px solid #0f9d58 !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+
+    with col4:
+        # Sums all forecast_values for the selected horizon — updates when
+        # the Forecast Horizon filter changes so the number matches the orange line.
+        if forecast_values:
+            projected_total = sum(forecast_values)
+            st.metric(
+                f"Projected Revenue ({projection_option})",
+                f"${projected_total:,.0f}",
+                delta="Based on forecast model"
+            )
+        else:
+            st.metric("Projected Revenue", "—", delta="No forecast available", delta_color="off")
+
+    st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+
+    # ── Forecast chart + Alert panel ──────────────────────────────────────────
+    # Two-column layout: chart takes 2/3 width, alert panel takes 1/3.
+
+    col_chart, col_alerts = st.columns([2, 1])
+
+    with col_chart:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0; 
+                        border-bottom: none; border-top: 3px solid #0f9d58;'>
+                <h3 style='margin: 0; color: #202124; font-size: 0.95rem; font-weight: 500;'>
+                    Sales Forecast
+                </h3>
+                <p style='margin: 0.2rem 0 0 0; color: #5f6368; font-size: 0.8rem;'>
+                    Historical performance vs. projected growth
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        fig = go.Figure()
+
+        # Green solid line — actual historical sales from the uploaded/benchmark dataset
+        fig.add_trace(go.Scatter(
+            x=df_chart['period'], y=df_chart['sales'],
+            mode='lines+markers', name='Historical',
+            line=dict(color='#0f9d58', width=2.5),
+            marker=dict(size=6, color='#0f9d58'),
+            fill='tozeroy', fillcolor='rgba(15, 157, 88, 0.06)',
+            hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+        ))
+
+        # Orange dashed line — Alberto's LightGBM predictions (or fallback growth formula).
+        # Dashed style visually reinforces that this is a projection, not historical fact.
+        fig.add_trace(go.Scatter(
+            x=[last_period] + forecast_periods,
+            y=[last_value] + forecast_values,
+            mode='lines+markers', name='Projected',
+            line=dict(color='#f29900', width=2.5, dash='dash'),
+            marker=dict(size=6, color='#f29900'),
+            hovertemplate='<b>%{x}</b><br>Projected: $%{y:,.0f}<extra></extra>'
+        ))
+
+        # Vertical dotted line separating historical from projected — visual clarity for managers
+        fig.add_vline(x=last_period, line_dash="dot", line_color="#dadce0", line_width=1.5, opacity=0.8)
+
+        fig.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white', height=320,
+            margin=dict(l=60, r=20, t=16, b=50),
+            xaxis=dict(
+                showgrid=True, gridcolor='#f1f3f4',
+                title=dict(text="Month", font=dict(color='#5f6368', size=11)),
+                tickfont=dict(color='#5f6368', size=11),
+                showline=True, linecolor='#e0e0e0'
+            ),
+            yaxis=dict(
+                showgrid=True, gridcolor='#f1f3f4',
+                title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+                tickfont=dict(color='#5f6368', size=11),
+                tickformat='$,.0f',
+                range=[0, max(df_chart['sales'].max(), max(forecast_values) if forecast_values else 0) * 1.15]  # max(forecast_values) crashes on empty list bug fixed
+            ),
+            # I added this to every single fig.update_layout call to ensure that
+            # all charts will have their hover labels left-aligned instead of the random
+            # left and right sometimes.
+            hoverlabel=dict(align="left"),
+            legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, font=dict(color='#5f6368', size=11)),
+            hovermode='x unified',
+            font=dict(color='#202124', family='Google Sans, Roboto')
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ── Alert panel ───────────────────────────────────────────────────────────
+    # Powered by James's alerter. Each card shows:
+    #   - Direction label (Sales Increasing / Sales Decreasing)
+    #   - Product name
+    #   - Estimated % change from normal range (derived from James's severity score)
+    # Color coding: Green = sales spike up (good), Red = sales spike down (bad)
+
+    margin_alert_notice_html = (
+        f"<p style='color: #5f6368; font-size: 0.78rem; margin: 0.75rem 0 0 0; "
+        f"border-left: 3px solid #5f6368; padding-left: 0.75rem;'>"
+        f"{html.escape(margin_alert_notice)}</p>"
+    ) if margin_alert_notice else ""
+
+    with col_alerts:
+        if alerts_df.empty:
+            # All clear state: no flags in the filtered data.
+            st.markdown(f"""
+                <div style='background-color: #ffffff; padding: 1.25rem 1.5rem;
+                            border-radius: 0; border: 1px solid #e0e0e0;
+                            border-top: 3px solid #0f9d58; height: 100%;'>
+                    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                              text-transform: uppercase; letter-spacing: 0.05em;
+                              margin: 0 0 1rem 0;'>Alert Center</p>
+                    <div style='background-color: #e6f4ea; border-radius: 4px;
+                                padding: 1.25rem; text-align: center;'>
+                        <p style='color: #0b8043; font-weight: 500; font-size: 0.9rem; margin: 0;'>All Clear</p>
+                        <p style='color: #5f6368; font-size: 0.8rem; margin: 0.25rem 0 0 0;'>No issues detected</p>
+                    </div>
+                    {margin_alert_notice_html}
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            # Browser-native details toggle: instant open/close without a Streamlit rerun.
+            alert_cards_html = ""
+
+            for _, alert in alerts_df.iterrows():
+                severity = float(alert['severity'])
+                pct      = round((severity - 1) * 25)
+
+                if alert['alert_type'] == "Sales Anomaly":
+                    try:
+                        parts   = alert['metric'].split()
+                        current = float(parts[2])
+                        mean    = float(parts[-1])
+                        is_up   = current > mean
+                    except:
+                        is_up = severity > 2.5
+
+                    if is_up:
+                        color = "#0b8043"; bg = "#e6f4ea"
+                        label = "📈 Sales Increasing"
+                        plain_metric = f"Up ~{pct}% above normal range"
+                    else:
+                        color = "#d93025"; bg = "#fce8e6"
+                        label = "📉 Sales Decreasing"
+                        plain_metric = f"Down ~{pct}% below normal range"
+
+                elif alert['alert_type'] == "Demand Decline":
                     color = "#d93025"; bg = "#fce8e6"
                     label = "📉 Sales Decreasing"
                     plain_metric = f"Down ~{pct}% below normal range"
 
-            elif alert['alert_type'] == "Demand Decline":
-                color = "#d93025"; bg = "#fce8e6"
-                label = "📉 Sales Decreasing"
-                plain_metric = f"Down ~{pct}% below normal range"
+                else:
+                    color = "#5f6368"; bg = "#f1f3f4"
+                    label = "⚠️ Low Profit Margin"
+                    plain_metric = "This product has been losing money for multiple periods"
 
-            else:
-                color = "#5f6368"; bg = "#f1f3f4"
-                label = "⚠️ Low Profit Margin"
-                plain_metric = "This product has been losing money for multiple periods"
+                # Andrew Garcia Leopold: show the product name even if the alert data
+                # arrives as "product" instead of "product_name".
+                alert_product_name = alert.get("product_name", alert.get("product", "Unknown product"))
 
-            # Andrew Garcia Leopold: show the product name even if the alert data
-            # arrives as "product" instead of "product_name".
-            alert_product_name = alert.get("product_name", alert.get("product", "Unknown product"))
+                alert_cards_html += dedent(f"""
+                <div style='background-color: {bg}; padding: 0.75rem 1rem;
+                            margin-top: 2px; border-left: 3px solid {color};'>
+                    <span style='color: {color}; font-size: 0.7rem; font-weight: 500;'>
+                        {html.escape(label)}
+                    </span>
+                    <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
+                        {html.escape(str(alert_product_name))}
+                    </p>
+                    <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
+                        {html.escape(plain_metric)}
+                    </p>
+                </div>
+                """)
 
-            alert_cards_html += dedent(f"""
-            <div style='background-color: {bg}; padding: 0.75rem 1rem;
-                        margin-top: 2px; border-left: 3px solid {color};'>
-                <span style='color: {color}; font-size: 0.7rem; font-weight: 500;'>
-                    {html.escape(label)}
-                </span>
-                <p style='margin: 0.2rem 0 0 0; color: #202124; font-size: 0.85rem; font-weight: 500;'>
-                    {html.escape(str(alert_product_name))}
-                </p>
-                <p style='margin: 0.1rem 0 0 0; color: #5f6368; font-size: 0.75rem;'>
-                    {html.escape(plain_metric)}
-                </p>
-            </div>
-            """)
-
-        # Andrew Garcia Leopold: use components.html to keep Alert Center working on different Streamlit versions.
-        # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
-        components.html(dedent(f"""
-            <style>
-                .alert-toggle {{
-                    font-family: "Google Sans", Roboto, sans-serif;
-                }}
-                details.alert-toggle > summary {{
-                    list-style: none;
-                    cursor: pointer;
-                }}
-                details.alert-toggle > summary::-webkit-details-marker {{
-                    display: none;
-                }}
-            </style>
-            <details class='alert-toggle'>
-                <summary>
-                    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
-                                border-radius: 0; border: 1px solid #e0e0e0;
-                                border-top: 3px solid #d93025; display: flex;
-                                align-items: center; justify-content: space-between; gap: 1rem;'>
-                        <div>
-                            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem 0;'>
-                                Alert Center
-                            </p>
-                            <span style='background: #fce8e6; color: #d93025; font-size: 0.75rem;
-                                         font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 2px;'>
-                                {len(alerts_df)} Active
+            # Andrew Garcia Leopold: use components.html to keep Alert Center working on different Streamlit versions.
+            # The details tag still opens/closes instantly, and the alert list scrolls inside the card.
+            components.html(dedent(f"""
+                <style>
+                    .alert-toggle {{
+                        font-family: "Google Sans", Roboto, sans-serif;
+                    }}
+                    details.alert-toggle > summary {{
+                        list-style: none;
+                        cursor: pointer;
+                    }}
+                    details.alert-toggle > summary::-webkit-details-marker {{
+                        display: none;
+                    }}
+                </style>
+                <details class='alert-toggle'>
+                    <summary>
+                        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                                    border-radius: 0; border: 1px solid #e0e0e0;
+                                    border-top: 3px solid #d93025; display: flex;
+                                    align-items: center; justify-content: space-between; gap: 1rem;'>
+                            <div>
+                                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem 0;'>
+                                    Alert Center
+                                </p>
+                                <span style='background: #fce8e6; color: #d93025; font-size: 0.75rem;
+                                             font-weight: 500; padding: 0.2rem 0.6rem; border-radius: 2px;'>
+                                    {len(alerts_df)} Active
+                                </span>
+                            </div>
+                            <span style='background-color: #ffffff; color: #0f9d58; border: 1px solid #dadce0;
+                                         border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.8rem;
+                                         font-weight: 500; white-space: nowrap;'>
+                                Show / hide details
                             </span>
                         </div>
-                        <span style='background-color: #ffffff; color: #0f9d58; border: 1px solid #dadce0;
-                                     border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.8rem;
-                                     font-weight: 500; white-space: nowrap;'>
-                            Show / hide details
+                    </summary>
+                    <div style='border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                                border-bottom: 1px solid #e0e0e0; max-height: 280px;
+                                overflow-y: auto;'>
+                        {margin_alert_notice_html}
+                        {alert_cards_html}
+                    </div>
+                </details>
+            """).strip(), height=350)
+
+# TAB 2 — PRODUCTS
+# Answers: Which products should I care about?
+
+with tab2:
+
+    # ── Top 5 Best & Worst Sellers ────────────────────────────────────────────
+    # Quick scan cards — green for winners, red for underperformers.
+
+    col_best, col_worst = st.columns(2)
+
+    with col_best:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-top: 3px solid #0f9d58; border-bottom: none;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Top Performers
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Products driving the most revenue
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        for i, row in top5.iterrows():
+            rank = i + 1
+            st.markdown(f"""
+                <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                            border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #f1f3f4;
+                            display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                        <span style='background-color: #e6f4ea; color: #0b8043;
+                                     font-size: 0.7rem; font-weight: 600;
+                                     width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                     display: inline-flex; align-items: center; justify-content: center;'>
+                            {rank}
+                        </span>
+                        <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                            {row['product']}
                         </span>
                     </div>
-                </summary>
-                <div style='border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                            border-bottom: 1px solid #e0e0e0; max-height: 280px;
-                            overflow-y: auto;'>
-                    {alert_cards_html}
+                    <span style='color: #0b8043; font-size: 0.875rem; font-weight: 500;'>
+                        ${row['total_sales']:,.0f}
+                    </span>
                 </div>
-            </details>
-        """).strip(), height=350)
+            """, unsafe_allow_html=True)
 
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+        st.markdown("""
+            <div style='background-color: #ffffff; height: 0.75rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #e0e0e0;'>
+            </div>
+        """, unsafe_allow_html=True)
 
-# ── Model Accuracy panel ──────────────────────────────────────────────────────
-# Shows Alberto's model benchmarking results — which method won and by how much.
-# Reads from model_comparison.csv if available, falls back to forecast residuals.
+    with col_worst:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-top: 3px solid #d93025; border-bottom: none;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Underperformers
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Products generating the least revenue
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-st.markdown("""
-    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                border-radius: 0; border: 1px solid #e0e0e0;
-                border-bottom: none; border-top: 3px solid #1a73e8;'>
-        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-            Model Accuracy
-        </p>
-        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-            Forecast methods compared and selected winner
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+        for i, row in bottom5.iterrows():
+            rank = i + 1
+            st.markdown(f"""
+                <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
+                            border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #f1f3f4;
+                            display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                        <span style='background-color: #fce8e6; color: #d93025;
+                                     font-size: 0.7rem; font-weight: 600;
+                                     width: 1.4rem; height: 1.4rem; border-radius: 50%;
+                                     display: inline-flex; align-items: center; justify-content: center;'>
+                            {rank}
+                        </span>
+                        <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
+                            {row['product']}
+                        </span>
+                    </div>
+                    <span style='color: #d93025; font-size: 0.875rem; font-weight: 500;'>
+                        ${row['total_sales']:,.0f}
+                    </span>
+                </div>
+            """, unsafe_allow_html=True)
 
-if model_accuracy_df is None or model_accuracy_df.empty:
-    st.info("No model accuracy data is available yet.")
-else:
-    accuracy_view = model_accuracy_df.copy()
-    winner_rows = accuracy_view[accuracy_view["selected_winner"] == True]
-    if winner_rows.empty and "mae" in accuracy_view.columns and accuracy_view["mae"].notna().any():
-        winner_row = accuracy_view.loc[accuracy_view["mae"].idxmin()]
-    elif winner_rows.empty:
-        winner_row = accuracy_view.iloc[0]
-    else:
-        winner_row = winner_rows.iloc[0]
+        st.markdown("""
+            <div style='background-color: #ffffff; height: 0.75rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #e0e0e0;'>
+            </div>
+        """, unsafe_allow_html=True)
 
-    metric_cols = st.columns(4)
-    metric_cols[0].metric("Winning Model", str(winner_row.get("method_name", method_used or "Unknown")))
-    metric_cols[1].metric(
-        "MAE",
-        "N/A" if pd.isna(winner_row.get("mae", pd.NA)) else f"{float(winner_row.get('mae')):,.3f}",
-    )
-    metric_cols[2].metric(
-        "RMSE",
-        "N/A" if pd.isna(winner_row.get("rmse", pd.NA)) else f"{float(winner_row.get('rmse')):,.3f}",
-    )
-    metric_cols[3].metric("Models Compared", f"{len(accuracy_view):,}")
+    st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
 
-    display_columns = [
-        col for col in ["method_name", "selected_winner", "mae", "rmse", "mase", "rows", "notes"]
-        if col in accuracy_view.columns
-    ]
+    # ── Top 5 Product Trend Lines + MoM Change ────────────────────────────────
+    # Left: are my best products growing or declining over time?
+    # Right: which products had the biggest jump or drop last month?
 
-    for col in ["mae", "rmse", "mase"]:
-        if col in accuracy_view.columns:
-            accuracy_view[col] = pd.to_numeric(accuracy_view[col], errors="coerce").round(3)
+    col_trend, col_mom = st.columns([3, 2])
 
-    st.dataframe(accuracy_view[display_columns], use_container_width=True, hide_index=True)
+    with col_trend:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-bottom: none; border-top: 3px solid #0f9d58;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Top 5 Product Trends
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Are your best sellers growing or declining month over month?
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    if "mae" in accuracy_view.columns and accuracy_view["mae"].notna().any():
-        chart_df = accuracy_view.dropna(subset=["mae"]).sort_values("mae")
-        fig_accuracy = go.Figure()
-        fig_accuracy.add_trace(go.Bar(
-            x=chart_df["method_name"],
-            y=chart_df["mae"],
-            marker_color=["#0f9d58" if selected else "#1a73e8" for selected in chart_df["selected_winner"]],
-            text=[f"{value:.3f}" for value in chart_df["mae"]],
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate="<b>%{x}</b><br>MAE: %{y:.3f}<extra></extra>",
-        ))
-        fig_accuracy.update_layout(
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=300, margin=dict(l=60, r=20, t=20, b=60),
-            xaxis=dict(title=dict(text="Model", font=dict(color="#5f6368", size=11)),
-                       tickfont=dict(color="#5f6368", size=11), showgrid=False),
-            yaxis=dict(title=dict(text="MAE (lower is better)", font=dict(color="#5f6368", size=11)),
-                       tickfont=dict(color="#5f6368", size=11), showgrid=True, gridcolor="#f1f3f4",
-                       range=[0, chart_df["mae"].max() * 1.25]),
-            showlegend=False,
-            font=dict(color="#202124", family="Google Sans, Roboto"),
+        # Build monthly sales per product for top 5
+        top5_names = top5['product'].tolist()
+        product_monthly = (
+            df_filtered[df_filtered[name_col].isin(top5_names)]
+            .groupby([name_col, df_filtered[df_filtered[name_col].isin(top5_names)]['date'].dt.to_period('M')])['sales']
+            .sum().reset_index()
         )
-        st.plotly_chart(fig_accuracy, use_container_width=True)
+        product_monthly['period'] = product_monthly['date'].astype(str)
+        product_monthly = product_monthly.rename(columns={name_col: 'product'})
 
-    st.caption(f"Accuracy source: {model_accuracy_source}")
+        fig_prod_trend = go.Figure()
+        for i, prod in enumerate(top5_names):
+            prod_data = product_monthly[product_monthly['product'] == prod]
+            fig_prod_trend.add_trace(go.Scatter(
+                x=prod_data['period'], y=prod_data['sales'],
+                mode='lines', name=str(prod),
+                line=dict(color=category_colors[i % len(category_colors)], width=2),
+                hovertemplate=f'<b>{prod}</b><br>%{{x}}<br>Revenue: $%{{y:,.0f}}<extra></extra>'
+            ))
 
-# ── Top 5 Best & Worst Sellers ────────────────────────────────────────────────
-# Side by side panels below the forecast chart.
-# Green = products to push / invest in. Red = products to investigate or cut.
-# Both update when store/category filters change so managers can drill down
-# to see top/bottom sellers for a specific store or category.
+        fig_prod_trend.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white',
+            height=360, margin=dict(l=60, r=20, t=16, b=60),
+            xaxis=dict(showgrid=True, gridcolor='#f1f3f4',
+                       tickfont=dict(color='#5f6368', size=10),
+                       title=dict(text="Month", font=dict(color='#5f6368', size=11))),
+            yaxis=dict(showgrid=True, gridcolor='#f1f3f4',
+                       tickfont=dict(color='#5f6368', size=11), tickformat='$,.0f',
+                       title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11))),
+            hoverlabel=dict(align="left"),
+            legend=dict(orientation="h", yanchor="top", y=-0.2,
+                        xanchor="center", x=0.5, font=dict(color='#5f6368', size=10)),
+            hovermode='x unified',
+            font=dict(color='#202124', family='Google Sans, Roboto')
+        )
 
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+        st.plotly_chart(fig_prod_trend, use_container_width=True, key="tab2_prod_trend")
 
-col_best, col_worst = st.columns(2)
-
-
-# THE ISSUE WAS HERE! SOMEONE INDENTED THIS THING AND THE ENTIRE THING COLLAPSED!
-with col_best:
-    st.markdown("""
-        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
-                    border-radius: 0; border: 1px solid #e0e0e0;
-                    border-top: 3px solid #0f9d58; border-bottom: none;'>
-            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                Top Performers
-            </p>
-            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                Products driving the most revenue
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    for i, row in top5.iterrows():
-        rank = i + 1
-        st.markdown(f"""
-            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
-                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                        border-bottom: 1px solid #f1f3f4;
-                        display: flex; justify-content: space-between; align-items: center;'>
-                <div style='display: flex; align-items: center; gap: 0.75rem;'>
-                    <span style='background-color: #e6f4ea; color: #0b8043;
-                                 font-size: 0.7rem; font-weight: 600;
-                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
-                                 display: inline-flex; align-items: center; justify-content: center;'>
-                        {rank}
-                    </span>
-                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
-                        {row['product']}
-                    </span>
-                </div>
-                <span style='color: #0b8043; font-size: 0.875rem; font-weight: 500;'>
-                    ${row['total_sales']:,.0f}
-                </span>
+    with col_mom:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-top: 3px solid #1a73e8; border-bottom: none;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Month-over-Month Change
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Biggest movers vs the previous month
+                </p>
             </div>
         """, unsafe_allow_html=True)
 
-    # Bottom border to close the card visually
-    st.markdown("""
-        <div style='background-color: #ffffff; height: 0.75rem;
-                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                    border-bottom: 1px solid #e0e0e0;'>
-        </div>
-    """, unsafe_allow_html=True)
+        # Calculate MoM % change per product — last month vs month before
+        df_filtered_copy = df_filtered.copy()
+        df_filtered_copy['period'] = df_filtered_copy['date'].dt.to_period('M')
+        product_period = (
+            df_filtered_copy.groupby([name_col, 'period'])['sales']
+            .sum().reset_index()
+        )
+        product_period = product_period.rename(columns={name_col: 'product'})
 
-with col_worst:
-    st.markdown("""
-        <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.75rem 1.5rem;
-                    border-radius: 0; border: 1px solid #e0e0e0;
-                    border-top: 3px solid #d93025; border-bottom: none;'>
-            <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                Underperformers
-            </p>
-            <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                Products generating the least revenue
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+        all_periods = sorted(product_period['period'].unique())
 
-    for i, row in bottom5.iterrows():
-        rank = i + 1
-        st.markdown(f"""
-            <div style='background-color: #ffffff; padding: 0.75rem 1.5rem;
-                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                        border-bottom: 1px solid #f1f3f4;
-                        display: flex; justify-content: space-between; align-items: center;'>
-                <div style='display: flex; align-items: center; gap: 0.75rem;'>
-                    <span style='background-color: #fce8e6; color: #d93025;
-                                 font-size: 0.7rem; font-weight: 600;
-                                 width: 1.4rem; height: 1.4rem; border-radius: 50%;
-                                 display: inline-flex; align-items: center; justify-content: center;'>
-                        {rank}
-                    </span>
-                    <span style='color: #202124; font-size: 0.875rem; font-weight: 500;'>
-                        {row['product']}
+        if len(all_periods) >= 2:
+            last_period_p  = all_periods[-1]
+            prev_period_p  = all_periods[-2]
+
+            last_sales = product_period[product_period['period'] == last_period_p].set_index('product')['sales']
+            prev_sales = product_period[product_period['period'] == prev_period_p].set_index('product')['sales']
+
+            mom_df = pd.DataFrame({'last': last_sales, 'prev': prev_sales}).dropna()
+            mom_df['pct_change'] = ((mom_df['last'] - mom_df['prev']) / mom_df['prev'] * 100).round(1)
+            mom_df = mom_df.sort_values('pct_change', ascending=False).reset_index()
+
+            # Show top 4 gainers and top 4 decliners
+            gainers  = mom_df.head(4)
+            decliners = mom_df.tail(4).sort_values('pct_change')
+
+            for _, row in gainers.iterrows():
+                arrow = "↑"
+                st.markdown(f"""
+                    <div style='background-color: #f8fff9; padding: 0.6rem 1.5rem;
+                                border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                                border-bottom: 1px solid #f1f3f4;
+                                display: flex; justify-content: space-between; align-items: center;'>
+                        <span style='color: #202124; font-size: 0.8rem; font-weight: 500;
+                                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                                     max-width: 60%;'>
+                            {str(row['product'])}
+                        </span>
+                        <span style='color: #0b8043; font-size: 0.85rem; font-weight: 600;
+                                     white-space: nowrap;'>
+                            {arrow} {row['pct_change']:+.1f}%
+                        </span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+                <div style='background-color: #f1f3f4; padding: 0.3rem 1.5rem;
+                            border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #e0e0e0;'>
+                    <span style='color: #5f6368; font-size: 0.68rem; font-weight: 500;
+                                 text-transform: uppercase; letter-spacing: 0.05em;'>
+                        Biggest Declines
                     </span>
                 </div>
-                <span style='color: #d93025; font-size: 0.875rem; font-weight: 500;'>
-                    ${row['total_sales']:,.0f}
-                </span>
+            """, unsafe_allow_html=True)
+
+            for _, row in decliners.iterrows():
+                arrow = "↓"
+                st.markdown(f"""
+                    <div style='background-color: #ffffff; padding: 0.6rem 1.5rem;
+                                border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                                border-bottom: 1px solid #f1f3f4;
+                                display: flex; justify-content: space-between; align-items: center;'>
+                        <span style='color: #202124; font-size: 0.8rem; font-weight: 500;
+                                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                                     max-width: 60%;'>
+                            {str(row['product'])}
+                        </span>
+                        <span style='color: #d93025; font-size: 0.85rem; font-weight: 600;
+                                     white-space: nowrap;'>
+                            {arrow} {row['pct_change']:+.1f}%
+                        </span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+                <div style='background-color: #ffffff; height: 0.75rem;
+                            border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #e0e0e0;'>
+                </div>
+            """, unsafe_allow_html=True)
+
+        else:
+            st.markdown("""
+                <div style='background-color: #f8f9fa; padding: 1.25rem; text-align: center;
+                            border: 1px solid #e0e0e0; border-top: none;'>
+                    <p style='color: #5f6368; font-size: 0.85rem; margin: 0;'>
+                        Need at least 2 months of data to show month-over-month change.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+# TAB 3 — ANALYSIS
+# Answers: Where is the money coming from?
+
+with tab3:
+    # ── Category Breakdown ────────────────────────────────────────────────────
+    # Two charts side by side answering different but complementary questions:
+    #   Bar chart  → "How much revenue does each category generate?" (absolute $)
+    #   Donut chart → "What share of total revenue does each category represent?" (%)
+    # Together they give a complete picture of category performance.
+    # Both update with store/category filters.
+
+    col_bar, col_pie = st.columns(2)
+
+    with col_bar:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-bottom: none; border-top: 3px solid #0f9d58;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Revenue by Category
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Total revenue generated per category
+                </p>
             </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("""
-        <div style='background-color: #ffffff; height: 0.75rem;
-                    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-                    border-bottom: 1px solid #e0e0e0;'>
-        </div>
-    """, unsafe_allow_html=True)
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(
+            x=category_sales['category'],
+            y=category_sales['total_sales'],
+            marker_color=category_colors[:len(category_sales)],
+            # Labels shown on/above each bar so small bars are still readable
+            text=[f"${v:,.0f}" for v in category_sales['total_sales']],
+            textposition='auto',   # Plotly decides inside vs outside per bar
+            cliponaxis=False,      # Prevents labels from being cut off at chart edge
+            textfont=dict(size=10, color='#202124'),
+            hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+        ))
 
-# ── Category Breakdown ────────────────────────────────────────────────────────
-# Two charts side by side answering different but complementary questions:
-#   Bar chart  → "How much revenue does each category generate?" (absolute $)
-#   Donut chart → "What share of total revenue does each category represent?" (%)
-# Together they give a complete picture of category performance.
-# Both update with store/category filters.
+        fig_bar.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white',
+            height=360, margin=dict(l=60, r=20, t=16, b=50),
+            xaxis=dict(
+                showgrid=False,
+                tickfont=dict(color='#5f6368', size=11),
+                showline=True, linecolor='#e0e0e0'
+            ),
+            yaxis=dict(
+                showgrid=True, gridcolor='#f1f3f4',
+                title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+                tickfont=dict(color='#5f6368', size=11),
+                tickformat='$,.0f',
+                # 25% headroom above tallest bar so outside labels are never clipped
+                range=[0, category_sales['total_sales'].max() * 1.25]
+            ),
+            hoverlabel=dict(align="left"),
+            showlegend=False,
+            font=dict(color='#202124', family='Google Sans, Roboto')
+        )
 
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-# ── Category trend line ───────────────────────────────────────────────────────
-# One line per category showing monthly revenue over time.
-# Lets the manager see which categories are growing vs declining.
+    with col_pie:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                        border-radius: 0; border: 1px solid #e0e0e0;
+                        border-bottom: none; border-top: 3px solid #1a73e8;'>
+                <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                          text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                    Revenue Share
+                </p>
+                <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                    Each category as a % of total revenue
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-st.markdown("""
-    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                border-radius: 0; border: 1px solid #e0e0e0;
-                border-bottom: none; border-top: 3px solid #0f9d58;'>
-        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-            Category Revenue Trends
-        </p>
-        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-            Monthly revenue per category — see which are growing or declining
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+        fig_pie = go.Figure()
+        fig_pie.add_trace(go.Pie(
+            labels=category_sales['category'],
+            values=category_sales['total_sales'],
+            marker=dict(colors=category_colors[:len(category_sales)]),
+            hole=0.4,  # Donut style — cleaner and more modern than a full pie
+            hovertemplate='<b>%{label}</b><br>Revenue: $%{value:,.0f}<br>Share: %{percent}<extra></extra>'
+        ))
 
-fig_trend = go.Figure()
-for i, cat in enumerate(category_sales['category'].tolist()):
-    cat_data = category_monthly[category_monthly['category'] == cat]
-    fig_trend.add_trace(go.Scatter(
-        x=cat_data['period'], y=cat_data['sales'],
-        mode='lines', name=cat,
-        line=dict(color=category_colors[i % len(category_colors)], width=2),
-        hovertemplate=f'<b>{cat}</b><br>%{{x}}<br>Revenue: $%{{y:,.0f}}<extra></extra>'
-    ))
+        fig_pie.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white',
+            height=360, margin=dict(l=20, r=20, t=16, b=50),
+            legend=dict(
+                orientation="h", yanchor="top", y=-0.15,
+                xanchor="center", x=0.5,
+                font=dict(color='#5f6368', size=10)
+            ),
+            hoverlabel=dict(align="left"),
+            font=dict(color='#202124', family='Google Sans, Roboto')
+        )
 
-fig_trend.update_layout(
-    plot_bgcolor='white', paper_bgcolor='white',
-    height=300, margin=dict(l=60, r=20, t=16, b=50),
-    xaxis=dict(
-        showgrid=True, gridcolor='#f1f3f4',
-        tickfont=dict(color='#5f6368', size=10),
-        title=dict(text="Month", font=dict(color='#5f6368', size=11))
-    ),
-    yaxis=dict(
-        showgrid=True, gridcolor='#f1f3f4',
-        tickfont=dict(color='#5f6368', size=11), tickformat='$,.0f',
-        title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11))
-    ),
-    hoverlabel=dict(align="left"),
-    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5,
-                font=dict(color='#5f6368', size=10)),
-    hovermode='x unified',
-    font=dict(color='#202124', family='Google Sans, Roboto')
-)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-st.plotly_chart(fig_trend, use_container_width=True)
+    # Andrew Garcia Leopold: Store Breakdown / Store Comparison.
+    # This shows stores side by side using total sales from the filtered data.
+    # It supports the Segment Analysis task by making store performance easy to compare.
+    st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
 
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
-
-col_bar, col_pie = st.columns(2)
-
-with col_bar:
     st.markdown("""
         <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
                     border-radius: 0; border: 1px solid #e0e0e0;
                     border-bottom: none; border-top: 3px solid #0f9d58;'>
             <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
                       text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                Revenue by Category
+                Store Comparison
             </p>
             <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                Total revenue generated per category
+                Total revenue by store for the selected filters
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-    fig_bar = go.Figure()
-    fig_bar.add_trace(go.Bar(
-        x=category_sales['category'],
-        y=category_sales['total_sales'],
-        marker_color=category_colors[:len(category_sales)],
-        # Labels shown on/above each bar so small bars are still readable
-        text=[f"${v:,.0f}" for v in category_sales['total_sales']],
-        textposition='auto',   # Plotly decides inside vs outside per bar
-        cliponaxis=False,      # Prevents labels from being cut off at chart edge
+    fig_store = go.Figure()
+    fig_store.add_trace(go.Bar(
+        x=store_sales['store_id'].astype(str),
+        y=store_sales['total_sales'],
+        # Made it so that the colors on the store comparison will differ for each store
+        # With the number of colors being the number of stores in the filtered data.
+        marker_color=category_colors[:len(store_sales)],
+        text=[f"${v:,.0f}" for v in store_sales['total_sales']],
+        textposition='auto',
+        cliponaxis=False,
         textfont=dict(size=10, color='#202124'),
-        hovertemplate='<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
+        hovertemplate='<b>Store %{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
     ))
 
-    fig_bar.update_layout(
+    fig_store.update_layout(
         plot_bgcolor='white', paper_bgcolor='white',
         height=360, margin=dict(l=60, r=20, t=16, b=50),
         xaxis=dict(
+            title=dict(text="Store ID", font=dict(color='#5f6368', size=11)),
             showgrid=False,
             tickfont=dict(color='#5f6368', size=11),
             showline=True, linecolor='#e0e0e0'
         ),
         yaxis=dict(
-            showgrid=True, gridcolor='#f1f3f4',
             title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
+            showgrid=True, gridcolor='#f1f3f4',
             tickfont=dict(color='#5f6368', size=11),
             tickformat='$,.0f',
-            # 25% headroom above tallest bar so outside labels are never clipped
-            range=[0, category_sales['total_sales'].max() * 1.25]
+            range=[0, store_sales['total_sales'].max() * 1.25]
         ),
         hoverlabel=dict(align="left"),
         showlegend=False,
         font=dict(color='#202124', family='Google Sans, Roboto')
     )
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_store, use_container_width=True)
 
-with col_pie:
+# TAB 4 — MODEL
+# Answers: Which forecasting model is the most accurate and why?
+# Shows Alberto's model benchmarking results in a clean card layout.
+
+with tab4:
+
+    # ── Model Accuracy panel ──────────────────────────────────────────────────
+    # Reads from model_comparison.csv if available, falls back to forecast residuals.
+    # Replaces the ugly default st.dataframe with styled card rows matching the
+    # rest of the dashboard aesthetic.
+
     st.markdown("""
         <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
                     border-radius: 0; border: 1px solid #e0e0e0;
                     border-bottom: none; border-top: 3px solid #1a73e8;'>
             <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
                       text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-                Revenue Share
+                Model Accuracy
             </p>
             <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-                Each category as a % of total revenue
+                Forecast methods compared — lower MAE and RMSE is better
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-    fig_pie = go.Figure()
-    fig_pie.add_trace(go.Pie(
-        labels=category_sales['category'],
-        values=category_sales['total_sales'],
-        marker=dict(colors=category_colors[:len(category_sales)]),
-        hole=0.4,  # Donut style — cleaner and more modern than a full pie
-        hovertemplate='<b>%{label}</b><br>Revenue: $%{value:,.0f}<br>Share: %{percent}<extra></extra>'
-    ))
+    if model_accuracy_df is None or model_accuracy_df.empty:
+        st.markdown("""
+            <div style='background-color: #f8f9fa; border: 1px solid #e0e0e0; border-top: none;
+                        padding: 1.5rem; text-align: center;'>
+                <p style='color: #5f6368; font-size: 0.875rem; margin: 0;'>
+                    No model accuracy data available yet.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        accuracy_view = model_accuracy_df.copy()
+        winner_rows   = accuracy_view[accuracy_view["selected_winner"] == True]
+        if winner_rows.empty and "mae" in accuracy_view.columns and accuracy_view["mae"].notna().any():
+            winner_row = accuracy_view.loc[accuracy_view["mae"].idxmin()]
+        elif winner_rows.empty:
+            winner_row = accuracy_view.iloc[0]
+        else:
+            winner_row = winner_rows.iloc[0]
 
-    fig_pie.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white',
-        height=360, margin=dict(l=20, r=20, t=16, b=50),
-        legend=dict(
-            orientation="h", yanchor="top", y=-0.15,
-            xanchor="center", x=0.5,
-            font=dict(color='#5f6368', size=10)
-        ),
-        hoverlabel=dict(align="left"),
-        font=dict(color='#202124', family='Google Sans, Roboto')
-    )
+        winner_name = str(winner_row.get("method_name", method_used or "Unknown"))
+        winner_mae  = winner_row.get("mae", pd.NA)
+        winner_rmse = winner_row.get("rmse", pd.NA)
+        mae_str     = f"{float(winner_mae):,.3f}"  if pd.notna(winner_mae)  else "N/A"
+        rmse_str    = f"{float(winner_rmse):,.3f}" if pd.notna(winner_rmse) else "N/A"
 
-    st.plotly_chart(fig_pie, use_container_width=True)
+        # ── Winner highlight banner ───────────────────────────────────────────
+        # Shows the winning model prominently with key metrics at a glance.
 
-# Andrew Garcia Leopold: Store Breakdown / Store Comparison.
-# This shows stores side by side using total sales from the filtered data.
-# It supports the Segment Analysis task by making store performance easy to compare.
-st.markdown("<div style='margin: 1.5rem 0 0.5rem 0;'></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='background-color: #e6f4ea; border: 1px solid #ceead6;
+                        border-top: none; padding: 1rem 1.5rem; margin-bottom: 1px;
+                        display: flex; align-items: center;
+                        justify-content: space-between; flex-wrap: wrap; gap: 1rem;'>
+                <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                    <span style='background-color: #0f9d58; color: #ffffff; font-size: 0.7rem;
+                                 font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 2px;
+                                 text-transform: uppercase; letter-spacing: 0.05em;'>
+                        ✓ Winner
+                    </span>
+                    <span style='color: #202124; font-size: 1rem; font-weight: 500;'>
+                        {winner_name}
+                    </span>
+                </div>
+                <div style='display: flex; gap: 2.5rem;'>
+                    <div style='text-align: center;'>
+                        <p style='color: #5f6368; font-size: 0.7rem; font-weight: 500;
+                                  text-transform: uppercase; letter-spacing: 0.06em; margin: 0;'>MAE</p>
+                        <p style='color: #0b8043; font-size: 1.2rem; font-weight: 500; margin: 0;'>{mae_str}</p>
+                    </div>
+                    <div style='text-align: center;'>
+                        <p style='color: #5f6368; font-size: 0.7rem; font-weight: 500;
+                                  text-transform: uppercase; letter-spacing: 0.06em; margin: 0;'>RMSE</p>
+                        <p style='color: #0b8043; font-size: 1.2rem; font-weight: 500; margin: 0;'>{rmse_str}</p>
+                    </div>
+                    <div style='text-align: center;'>
+                        <p style='color: #5f6368; font-size: 0.7rem; font-weight: 500;
+                                  text-transform: uppercase; letter-spacing: 0.06em; margin: 0;'>Models</p>
+                        <p style='color: #0b8043; font-size: 1.2rem; font-weight: 500; margin: 0;'>{len(accuracy_view)}</p>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-st.markdown("""
-    <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
-                border-radius: 0; border: 1px solid #e0e0e0;
-                border-bottom: none; border-top: 3px solid #0f9d58;'>
-        <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
-                  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
-            Store Comparison
-        </p>
-        <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
-            Total revenue by store for the selected filters
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+        # ── Model comparison rows — styled like top/bottom sellers ────────────
+        # One row per model, winner highlighted in green, others in neutral.
 
-fig_store = go.Figure()
-fig_store.add_trace(go.Bar(
-    x=store_sales['store_id'].astype(str),
-    y=store_sales['total_sales'],
-    # Made it so that the colors on the store comparison will differ for each store
-    # With the number of colors being the number of stores in the filtered data.
-    marker_color=category_colors[:len(store_sales)],
-    text=[f"${v:,.0f}" for v in store_sales['total_sales']],
-    textposition='auto',
-    cliponaxis=False,
-    textfont=dict(size=10, color='#202124'),
-    hovertemplate='<b>Store %{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>'
-))
+        for _, model_row in accuracy_view.iterrows():
+            is_winner  = bool(model_row.get("selected_winner", False))
+            m_name     = str(model_row.get("method_name", "Unknown"))
+            m_mae      = model_row.get("mae", pd.NA)
+            m_rmse     = model_row.get("rmse", pd.NA)
+            m_mae_str  = f"{float(m_mae):,.3f}"  if pd.notna(m_mae)  else "—"
+            m_rmse_str = f"{float(m_rmse):,.3f}" if pd.notna(m_rmse) else "—"
 
-fig_store.update_layout(
-    plot_bgcolor='white', paper_bgcolor='white',
-    height=360, margin=dict(l=60, r=20, t=16, b=50),
-    xaxis=dict(
-        title=dict(text="Store ID", font=dict(color='#5f6368', size=11)),
-        showgrid=False,
-        tickfont=dict(color='#5f6368', size=11),
-        showline=True, linecolor='#e0e0e0'
-    ),
-    yaxis=dict(
-        title=dict(text="Revenue ($)", font=dict(color='#5f6368', size=11)),
-        showgrid=True, gridcolor='#f1f3f4',
-        tickfont=dict(color='#5f6368', size=11),
-        tickformat='$,.0f',
-        range=[0, store_sales['total_sales'].max() * 1.25]
-    ),
-    hoverlabel=dict(align="left"),
-    showlegend=False,
-    font=dict(color='#202124', family='Google Sans, Roboto')
-)
+            row_bg     = "#f8fff9" if is_winner else "#ffffff"
+            name_color = "#0b8043" if is_winner else "#202124"
+            name_weight = "600" if is_winner else "400"
+            best_badge  = "<span style='background-color:#e6f4ea; color:#0b8043; font-size:0.68rem; font-weight:600; padding:0.15rem 0.5rem; border-radius:2px; margin-left:0.5rem;'>✓ Best</span>" if is_winner else ""
 
-st.plotly_chart(fig_store, use_container_width=True)
+            st.markdown(f"""
+                <div style='background-color: {row_bg}; padding: 0.75rem 1.5rem;
+                            border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                            border-bottom: 1px solid #f1f3f4;
+                            display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='color: {name_color}; font-size: 0.875rem; font-weight: {name_weight};'>
+                        {m_name}{best_badge}
+                    </span>
+                    <div style='display: flex; gap: 2.5rem;'>
+                        <div style='text-align: right;'>
+                            <p style='color: #5f6368; font-size: 0.68rem; text-transform: uppercase;
+                                      letter-spacing: 0.05em; margin: 0;'>MAE</p>
+                            <p style='color: {name_color}; font-size: 0.875rem;
+                                      font-weight: 500; margin: 0;'>{m_mae_str}</p>
+                        </div>
+                        <div style='text-align: right;'>
+                            <p style='color: #5f6368; font-size: 0.68rem; text-transform: uppercase;
+                                      letter-spacing: 0.05em; margin: 0;'>RMSE</p>
+                            <p style='color: {name_color}; font-size: 0.875rem;
+                                      font-weight: 500; margin: 0;'>{m_rmse_str}</p>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # Bottom border to close the card visually
+        st.markdown("""
+            <div style='background-color: #ffffff; height: 0.75rem;
+                        border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
+                        border-bottom: 1px solid #e0e0e0; margin-bottom: 1.5rem;'>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # ── MAE comparison bar chart — wrapped in a card ──────────────────────
+        # Visual comparison of all models — green bar = winner, gray = others.
+
+        if "mae" in accuracy_view.columns and accuracy_view["mae"].notna().any():
+            st.markdown("""
+                <div style='background-color: #ffffff; padding: 1rem 1.5rem 0.5rem 1.5rem;
+                            border-radius: 0; border: 1px solid #e0e0e0;
+                            border-bottom: none; border-top: 3px solid #0f9d58;'>
+                    <p style='color: #5f6368; font-size: 0.72rem; font-weight: 500;
+                              text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.25rem 0;'>
+                        MAE Comparison
+                    </p>
+                    <p style='color: #202124; font-size: 0.8rem; margin: 0;'>
+                        Lower is better — green bar is the winning model
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            chart_df = accuracy_view.dropna(subset=["mae"]).sort_values("mae")
+            fig_accuracy = go.Figure()
+            fig_accuracy.add_trace(go.Bar(
+                x=chart_df["method_name"],
+                y=chart_df["mae"],
+                marker_color=["#0f9d58" if s else "#dadce0" for s in chart_df["selected_winner"]],
+                text=[f"{v:.3f}" for v in chart_df["mae"]],
+                textposition="outside",
+                cliponaxis=False,
+                textfont=dict(size=11, color='#202124'),
+                hovertemplate="<b>%{x}</b><br>MAE: %{y:.3f}<extra></extra>",
+            ))
+            fig_accuracy.update_layout(
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=280, margin=dict(l=40, r=20, t=16, b=50),
+                xaxis=dict(tickfont=dict(color="#5f6368", size=11), showgrid=False,
+                           showline=True, linecolor='#e0e0e0'),
+                yaxis=dict(
+                    title=dict(text="MAE (lower is better)", font=dict(color="#5f6368", size=11)),
+                    tickfont=dict(color="#5f6368", size=11), showgrid=True, gridcolor="#f1f3f4",
+                    range=[0, chart_df["mae"].max() * 1.3]
+                ),
+                hoverlabel=dict(align="left"),
+                showlegend=False,
+                font=dict(color="#202124", family="Google Sans, Roboto"),
+            )
+            st.plotly_chart(fig_accuracy, use_container_width=True)
+
+        st.markdown(f"""
+            <p style='color: #9aa0a6; font-size: 0.72rem; margin: 0.5rem 0 0 0;'>
+                Accuracy source: {model_accuracy_source}
+            </p>
+        """, unsafe_allow_html=True)
