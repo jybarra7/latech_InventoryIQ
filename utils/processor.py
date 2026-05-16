@@ -42,6 +42,57 @@ def get_feature_flags(raw_data: pd.DataFrame) -> dict:
     return feature_flags
 
 
+# Andrew Garcia Leopold: upload validation keeps bad CSV/XLSX files out of the cleaning pipeline.
+def validate_uploaded_data(raw_data: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: check that an uploaded CSV/XLSX has usable retail data."""
+    if not isinstance(raw_data, pd.DataFrame):
+        raise ValueError("Upload error: the file could not be read as a table.")
+
+    if raw_data.empty or len(raw_data.columns) == 0:
+        raise ValueError("Upload error: the file is empty. Please upload a CSV with rows and columns.")
+
+    normalized_columns = [normalize_column_name(column) for column in raw_data.columns]
+
+    if any(column == "" for column in normalized_columns):
+        raise ValueError("Upload error: one or more columns have no name. Please rename blank columns.")
+
+    duplicate_columns = sorted({
+        column for column in normalized_columns
+        if normalized_columns.count(column) > 1
+    })
+    if duplicate_columns:
+        raise ValueError(
+            "Upload error: duplicate column names found: "
+            + ", ".join(duplicate_columns)
+        )
+
+    column_mapping = infer_column_mapping(raw_data)
+    missing_required = [column for column in ["date", "sales"] if column not in column_mapping]
+    if missing_required:
+        raise ValueError(
+            "Upload error: the file must include a date column and a sales column. "
+            "Missing: " + ", ".join(missing_required)
+        )
+
+    date_column = column_mapping["date"]
+    parsed_dates = pd.to_datetime(raw_data[date_column], errors="coerce")
+    if parsed_dates.isna().any():
+        raise ValueError(
+            f"Upload error: '{date_column}' has blank or invalid dates. "
+            "Please use real dates like 2024-01-31."
+        )
+
+    sales_column = column_mapping["sales"]
+    parsed_sales = pd.to_numeric(raw_data[sales_column], errors="coerce")
+    if parsed_sales.isna().any():
+        raise ValueError(
+            f"Upload error: '{sales_column}' has blank or non-numeric sales values. "
+            "Please use numbers like 1250.50."
+        )
+
+    return column_mapping
+
+
 # -------------------------
 # FUZZY SCHEMA MAPPING
 # -------------------------
@@ -145,6 +196,8 @@ def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
 # -------------------------
 def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+
+    validate_uploaded_data(df)
 
     # Detect + standardize schema with the fuzzy alias mapper.
     df = map_to_standard_schema(df)
