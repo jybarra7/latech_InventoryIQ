@@ -163,8 +163,8 @@ def infer_column_mapping(df: pd.DataFrame) -> dict:
     return mapping
 
 
-def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
-    """Andrew Garcia Leopold: rename detected columns into the shared project schema."""
+def standardize_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: rename detected upload columns into project column names."""
     df = df.copy()
     column_mapping = infer_column_mapping(df)
 
@@ -180,6 +180,19 @@ def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
     rename_columns = {raw: clean for clean, raw in column_mapping.items()}
     df = df.rename(columns=rename_columns)
     df.attrs["column_mapping"] = column_mapping
+
+    mapped_raw_columns = set(column_mapping.values())
+    df.attrs["unmapped_columns"] = [
+        column for column in df.columns
+        if column not in mapped_raw_columns and column not in column_mapping
+    ]
+
+    return df
+
+
+def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: rename detected columns into the shared project schema."""
+    df = standardize_column_names(df)
 
     # Andrew Garcia Leopold: if a file has names but not IDs, create simple IDs.
     if "store_id" not in df.columns and "region" in df.columns:
