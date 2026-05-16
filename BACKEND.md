@@ -23,6 +23,7 @@ uvicorn main:app --reload
 | POST | `/forecast/run` | Runs all 4 models, returns benchmark comparison and winning model |
 | POST | `/forecast/future` | Generates forward-looking LightGBM forecast |
 | POST | `/forecast/kpis` | Returns KPI summary row for dashboard cards |
+| POST | `/alerts/run` | Runs all 3 alert detectors, returns severity-sorted alerts |
 
 All POST endpoints accept a retail CSV uploaded as multipart form data.
 
@@ -99,7 +100,6 @@ All POST endpoints accept a retail CSV uploaded as multipart form data.
 
 | Endpoint          |            Description                    |    Owner |
 |--------------------|------------------------------------------|--------------|
-| `POST /alerts/run` | Alert engine — wraps `models/alerter.py` | James |
 | `POST /summary/generate` | Gemini AI summary — wraps `utils/ai_summary.py` | TBD |
 | `POST /data/upload` | Schema mapping and retail_clean generation | Andrew |
 | Filter support | Server-side filtering by date, category, store | TBD |
