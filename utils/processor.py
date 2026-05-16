@@ -204,6 +204,58 @@ def map_to_standard_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def clean_standard_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: clean dates, numbers, and simple text fields."""
+    df = df.copy()
+
+    df["date"] = pd.to_datetime(df["date"])
+    df["sales"] = pd.to_numeric(df["sales"], errors="coerce")
+
+    if "quantity" in df.columns:
+        df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce")
+        df["quantity"] = df["quantity"].fillna(df["sales"])
+    else:
+        df["quantity"] = df["sales"]
+
+    if "profit" in df.columns:
+        df["profit"] = pd.to_numeric(df["profit"], errors="coerce").fillna(0)
+
+    if "transaction_count" in df.columns:
+        df["transaction_count"] = pd.to_numeric(
+            df["transaction_count"],
+            errors="coerce",
+        ).fillna(0)
+
+    for text_column in ["product_name", "category", "region"]:
+        if text_column in df.columns:
+            df[text_column] = df[text_column].fillna("Unknown").astype(str).str.strip()
+
+    return df
+
+
+def add_derived_fields(df: pd.DataFrame) -> pd.DataFrame:
+    """Andrew Garcia Leopold: add time and sales history fields for forecasting."""
+    df = df.copy()
+    df = df.sort_values(["product_id", "store_id", "date"])
+
+    df["Month"] = df["date"].dt.month
+    df["Year"] = df["date"].dt.year
+
+    df["sales_lag_1"] = df.groupby(["product_id", "store_id"])["sales"].shift(1)
+    df["sales_lag_3"] = df.groupby(["product_id", "store_id"])["sales"].shift(3)
+
+    df["rolling_avg_4w"] = (
+        df.groupby(["product_id", "store_id"])["sales"]
+        .rolling(window=4, min_periods=1)
+        .mean()
+        .reset_index(level=[0, 1], drop=True)
+    )
+
+    df["quantity_velocity"] = df["sales"] - df["sales_lag_1"]
+
+    return df
+
+
 # -------------------------
 # MAIN CLEANING PIPELINE
 # -------------------------
@@ -244,13 +296,6 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     if aggregation_notes:
         df.attrs["aggregation_notes"] = aggregation_notes
 
-    if "quantity" not in df.columns:
-        df["quantity"] = df["sales"]
-
-    # Type fixes
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values(["product_id", "store_id", "date"])
-
     # Base fields
     if "product_name" not in df.columns:
         df["product_name"] = "Item " + df["product_id"].astype(str)
@@ -258,24 +303,8 @@ def load_and_clean_data(df: pd.DataFrame) -> pd.DataFrame:
     if "category" not in df.columns:
         df["category"] = "Uncategorized"
 
-    # Time features
-    df["Month"] = df["date"].dt.month
-    df["Year"] = df["date"].dt.year
-
-    # Lag features
-    df["sales_lag_1"] = df.groupby(["product_id", "store_id"])["sales"].shift(1)
-    df["sales_lag_3"] = df.groupby(["product_id", "store_id"])["sales"].shift(3)
-
-    # Rolling feature
-    df["rolling_avg_4w"] = (
-        df.groupby(["product_id", "store_id"])["sales"]
-        .rolling(window=4, min_periods=1)
-        .mean()
-        .reset_index(level=[0, 1], drop=True)
-    )
-
-    # Velocity
-    df["quantity_velocity"] = df["sales"] - df["sales_lag_1"]
+    df = clean_standard_values(df)
+    df = add_derived_fields(df)
 
     # Final schema output
     clean_columns = [
