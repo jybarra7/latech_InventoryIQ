@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.forecast_routes import router as forecast_router
+from api.alert_routes import router as alert_router
 
 app = FastAPI(
     title="InventoryIQ",
