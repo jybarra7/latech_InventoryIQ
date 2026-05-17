@@ -281,6 +281,19 @@ def generate_filter_options(df: pd.DataFrame) -> dict:
     }
 
 
+def prepare_retail_data(raw_data: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: run the full backend prep flow for uploaded retail data."""
+    clean_df = load_and_clean_data(raw_data)
+    filters = generate_filter_options(clean_df)
+
+    return {
+        "data": clean_df,
+        "filters": filters,
+        "column_mapping": clean_df.attrs.get("column_mapping", {}),
+        "optional_fields": clean_df.attrs.get("optional_fields", {}),
+    }
+
+
 # -------------------------
 # MAIN CLEANING PIPELINE
 # -------------------------
