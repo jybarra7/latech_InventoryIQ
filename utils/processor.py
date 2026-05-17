@@ -5,6 +5,9 @@ import re
 from utils.schema import COLUMN_ALIASES, OPTIONAL_COLUMNS, SCHEMA
 
 
+FILTER_OPTION_KEYS = ["stores", "categories", "regions", "start_date", "end_date"]
+
+
 # -------------------------
 # APP COMPATIBILITY WRAPPER
 # -------------------------
@@ -269,7 +272,16 @@ def get_sorted_filter_values(df: pd.DataFrame, column_name: str) -> list:
 
 
 def generate_filter_options(df: pd.DataFrame) -> dict:
-    """Andrew Garcia Leopold: build store, region, category, and date filter options."""
+    """
+    Andrew Garcia Leopold: build the standard dashboard filter option contract.
+
+    Return shape:
+        stores: list of store IDs for the Store filter
+        categories: list of category names for the Category filter
+        regions: list of region names, or [] when region data is missing
+        start_date: earliest valid date in the cleaned data, or None
+        end_date: latest valid date in the cleaned data, or None
+    """
     date_values = pd.to_datetime(df["date"], errors="coerce").dropna()
 
     return {
@@ -281,10 +293,34 @@ def generate_filter_options(df: pd.DataFrame) -> dict:
     }
 
 
+def validate_filter_options_shape(filter_options: dict) -> bool:
+    """Andrew Garcia Leopold: confirm filter options match the expected backend contract."""
+    missing_keys = [key for key in FILTER_OPTION_KEYS if key not in filter_options]
+    extra_keys = [key for key in filter_options if key not in FILTER_OPTION_KEYS]
+
+    if missing_keys or extra_keys:
+        raise ValueError(
+            "Filter options must use exactly these keys: "
+            + ", ".join(FILTER_OPTION_KEYS)
+        )
+
+    for list_key in ["stores", "categories", "regions"]:
+        if not isinstance(filter_options[list_key], list):
+            raise ValueError(f"Filter option '{list_key}' must be a list.")
+
+    for date_key in ["start_date", "end_date"]:
+        date_value = filter_options[date_key]
+        if date_value is not None and not isinstance(date_value, pd.Timestamp):
+            raise ValueError(f"Filter option '{date_key}' must be a pandas Timestamp or None.")
+
+    return True
+
+
 def prepare_retail_data(raw_data: pd.DataFrame) -> dict:
     """Andrew Garcia Leopold: run the full backend prep flow for uploaded retail data."""
     clean_df = load_and_clean_data(raw_data)
     filters = generate_filter_options(clean_df)
+    validate_filter_options_shape(filters)
 
     return {
         "data": clean_df,
