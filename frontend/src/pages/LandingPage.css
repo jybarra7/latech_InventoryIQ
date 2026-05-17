@@ -1,7 +1,7 @@
 .landing {
   height: 100vh;
   width: 100vw;
-  background-color: #ffffff;
+  background-color: var(--white);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -16,8 +16,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 3rem;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #ffffff;
+  border-bottom: 1px solid var(--gray-border);
+  background-color: var(--white);
   flex-shrink: 0;
 }
 
@@ -27,7 +27,7 @@
 }
 
 .landing-nav-btn {
-  background-color: #0f9d58;
+  background-color: var(--blue);
   color: #ffffff;
   border: none;
   border-radius: 6px;
@@ -40,7 +40,7 @@
 }
 
 .landing-nav-btn:hover {
-  background-color: #0b8043;
+  background-color: var(--blue-dark);
   transform: translateY(-1px);
 }
 
@@ -57,13 +57,13 @@
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-color: #ffffff;
+  background-color: var(--white);
 }
 
 .landing-badge {
   display: inline-block;
-  background-color: #e6f4ea;
-  color: #0b8043;
+  background-color: var(--blue-light);
+  color: var(--blue-dark);
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -71,31 +71,31 @@
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
   margin-bottom: 1.5rem;
-  border: 1px solid #ceead6;
+  border: 1px solid var(--blue-border);
 }
 
 .landing-title {
   font-size: 3rem;
   font-weight: 700;
-  color: #202124;
+  color: var(--navy);
   line-height: 1.15;
   margin-bottom: 1rem;
 }
 
 .landing-title-accent {
-  color: #0f9d58;
+  color: var(--blue);
 }
 
 .landing-subtitle {
   font-size: 1rem;
-  color: #5f6368;
+  color: var(--text-gray);
   line-height: 1.7;
   margin-bottom: 2rem;
   max-width: 520px;
 }
 
 .landing-btn-primary {
-  background-color: #0f9d58;
+  background-color: var(--blue);
   color: #ffffff;
   border: none;
   border-radius: 6px;
@@ -105,14 +105,14 @@
   cursor: pointer;
   font-family: 'Google Sans', sans-serif;
   transition: all 0.2s;
-  box-shadow: 0 4px 16px rgba(15, 157, 88, 0.3);
+  box-shadow: 0 4px 16px rgba(33,150,243,0.3);
   margin-bottom: 2.5rem;
 }
 
 .landing-btn-primary:hover {
-  background-color: #0b8043;
+  background-color: var(--blue-dark);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(15, 157, 88, 0.4);
+  box-shadow: 0 8px 24px rgba(33,150,243,0.4);
 }
 
 /* Stats */
@@ -132,19 +132,19 @@
 .landing-stat-number {
   font-size: 1rem;
   font-weight: 700;
-  color: #0f9d58;
+  color: var(--blue);
 }
 
 .landing-stat-label {
   font-size: 0.7rem;
-  color: #9aa0a6;
+  color: var(--text-gray);
   white-space: nowrap;
 }
 
 .landing-stat-divider {
   width: 1px;
   height: 28px;
-  background-color: #e0e0e0;
+  background-color: var(--gray-border);
 }
 
 /* Four cards row */
@@ -153,14 +153,14 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
   padding: 1.5rem 3rem;
-  background-color: #f8f9fa;
-  border-top: 1px solid #e0e0e0;
+  background-color: #f8fafc;
+  border-top: 1px solid var(--gray-border);
   flex-shrink: 0;
 }
 
 .landing-card {
-  background-color: #ffffff;
-  border: 1px solid #e0e0e0;
+  background-color: var(--white);
+  border: 1px solid var(--gray-border);
   border-radius: 10px;
   padding: 1.25rem;
   transition: all 0.2s;
@@ -168,13 +168,13 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 3px rgba(30,45,90,0.06);
 }
 
 .landing-card:hover {
-  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 20px rgba(30,45,90,0.1);
   transform: translateY(-2px);
-  border-color: #ceead6;
+  border-color: var(--blue-border);
 }
 
 .landing-card-icon-wrap {
@@ -191,13 +191,13 @@
 .landing-card h3 {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #202124;
+  color: var(--navy);
   margin: 0;
 }
 
 .landing-card p {
   font-size: 0.78rem;
-  color: #5f6368;
+  color: var(--text-gray);
   line-height: 1.6;
   margin: 0;
 }
@@ -205,13 +205,13 @@
 /* Footer */
 .landing-footer {
   padding: 0.875rem 3rem;
-  border-top: 1px solid #e0e0e0;
-  background-color: #ffffff;
+  border-top: 1px solid var(--gray-border);
+  background-color: var(--white);
   flex-shrink: 0;
 }
 
 .landing-footer p {
   font-size: 0.75rem;
-  color: #9aa0a6;
+  color: var(--text-gray);
   text-align: center;
 }

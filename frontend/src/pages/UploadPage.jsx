@@ -56,7 +56,7 @@ function UploadPage() {
       {/* Navbar */}
       <nav className="upload-nav">
         <img
-          src="/logo.png"
+          src="/logo.webp"
           alt="InventoryIQ"
           className="upload-nav-logo"
           onClick={() => navigate('/')}

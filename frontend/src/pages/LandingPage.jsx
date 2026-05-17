@@ -9,7 +9,7 @@ function LandingPage() {
 
       {/* Navbar */}
       <nav className="landing-nav">
-        <img src="/logo.png" alt="InventoryIQ" className="landing-logo-img" />
+        <img src="/logo.webp" alt="InventoryIQ" className="landing-logo-img" />
         <button className="landing-nav-btn" onClick={() => navigate('/upload')}>
           Get Started
         </button>
