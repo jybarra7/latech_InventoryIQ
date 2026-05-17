@@ -1,2 +1,2 @@
-import { t as require_react } from "./react-DGPCLjpP.js";
+import { t as require_react } from "./react-BejDdLFV.js";
 export default require_react();
