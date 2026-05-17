@@ -53,6 +53,11 @@
   justify-content: center;
   padding: 2rem 3rem 1rem 3rem;
   text-align: center;
+  background-image: url('/LandingPageBackground.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #ffffff;
 }
 
 .landing-badge {
