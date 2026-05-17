@@ -38,18 +38,15 @@ function UploadPage() {
   function handleDrop(e) {
     e.preventDefault()
     setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    handleFile(file)
+    handleFile(e.dataTransfer.files[0])
   }
 
   function handleInputChange(e) {
-    const file = e.target.files[0]
-    handleFile(file)
+    handleFile(e.target.files[0])
   }
 
   function handleContinue() {
     if (!uploadedFile) return
-    // Mira's API call will go here — for now navigate to dashboard
     navigate('/dashboard')
   }
 
@@ -59,86 +56,82 @@ function UploadPage() {
       {/* Navbar */}
       <nav className="upload-nav">
         <img
-          src="/logo.webp"
+          src="/logo.png"
           alt="InventoryIQ"
-          className="upload-logo"
+          className="upload-nav-logo"
           onClick={() => navigate('/')}
-          style={{ cursor: 'pointer' }}
         />
       </nav>
 
-      {/* Robot illustration */}
-      <div className="upload-robot">
-        <img src="/robot.png" alt="" className="upload-robot-img" />
-      </div>
+      {/* Centered card */}
+      <div className="upload-center">
+        <div className="upload-card">
 
-      {/* Main content */}
-      <div className="upload-content">
-        <div className="upload-header">
-          <h1>Upload Your Data</h1>
-          <p>Drop your retail CSV or Excel file to get started. We handle the rest.</p>
-        </div>
-
-        {/* Drop zone */}
-        <div
-          className={`upload-dropzone ${isDragging ? 'upload-dropzone-active' : ''} ${uploadedFile ? 'upload-dropzone-success' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={handleInputChange}
-            style={{ display: 'none' }}
-          />
-
-          {uploadedFile ? (
-            <div className="upload-success">
-              <div className="upload-success-icon">✓</div>
-              <p className="upload-success-name">{uploadedFile.name}</p>
-              <p className="upload-success-size">
-                {(uploadedFile.size / 1024).toFixed(1)} KB · Click to change file
-              </p>
-            </div>
-          ) : (
-            <div className="upload-placeholder">
-              <div className="upload-icon">📂</div>
-              <p className="upload-main-text">
-                {isDragging ? 'Drop it here!' : 'Drag & drop your file here'}
-              </p>
-              <p className="upload-sub-text">or click to browse</p>
-              <span className="upload-formats">CSV · XLSX</span>
-            </div>
-          )}
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="upload-error">
-            ⚠️ {error}
+          <div className="upload-header">
+            <h1>Upload Your Data</h1>
+            <p>Drop your retail CSV or Excel file.<br />We handle the rest.</p>
           </div>
-        )}
 
-        {/* Continue button */}
-        <button
-          className={`upload-btn ${uploadedFile ? 'upload-btn-active' : 'upload-btn-disabled'}`}
-          onClick={handleContinue}
-          disabled={!uploadedFile}
-        >
-          {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
-        </button>
+          {/* Drop zone */}
+          <div
+            className={`upload-dropzone ${isDragging ? 'dragging' : ''} ${uploadedFile ? 'success' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              onChange={handleInputChange}
+              style={{ display: 'none' }}
+            />
 
-        {/* Reassurance */}
-        <div className="upload-reassurance">
-          <span>✓ Columns detected automatically</span>
-          <span>✓ No formatting required</span>
-          <span>✓ CSV and Excel supported</span>
+            {uploadedFile ? (
+              <div className="upload-success-state">
+                <div className="upload-success-icon">✓</div>
+                <p className="upload-success-name">{uploadedFile.name}</p>
+                <p className="upload-success-size">
+                  {(uploadedFile.size / 1024).toFixed(1)} KB · Click to change
+                </p>
+              </div>
+            ) : (
+              <div className="upload-idle-state">
+                <div className="upload-folder-icon">📂</div>
+                <p className="upload-main-text">
+                  {isDragging ? 'Drop it here!' : 'Drag & drop your file here'}
+                </p>
+                <p className="upload-sub-text">or click to browse</p>
+                <span className="upload-formats">CSV · XLSX</span>
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="upload-error">⚠️ {error}</div>
+          )}
+
+          {/* Button */}
+          <button
+            className={`upload-btn ${uploadedFile ? 'active' : 'disabled'}`}
+            onClick={handleContinue}
+            disabled={!uploadedFile}
+          >
+            {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
+          </button>
+
+          {/* Reassurance */}
+          <div className="upload-reassurance">
+            <span>✓ Auto column detection</span>
+            <span>✓ No formatting needed</span>
+            <span>✓ CSV & Excel supported</span>
+          </div>
+
         </div>
-
       </div>
+
     </div>
   )
 }
