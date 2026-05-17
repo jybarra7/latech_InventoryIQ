@@ -226,6 +226,95 @@
   color: #8a9bb5;
 }
 
+/* ── Loading state ── */
+.upload-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.upload-spinner {
+  width: 52px;
+  height: 52px;
+  border: 4px solid #e3f2fd;
+  border-top: 4px solid #2196f3;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.upload-loading-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e2d5a;
+}
+
+.upload-loading-step {
+  font-size: 0.875rem;
+  color: #8a9bb5;
+  min-height: 1.25rem;
+}
+
+.upload-loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  width: 100%;
+  max-width: 280px;
+  text-align: left;
+}
+
+.upload-step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: #8a9bb5;
+  transition: all 0.3s;
+}
+
+.upload-step-item.active {
+  color: #2196f3;
+  font-weight: 600;
+}
+
+.upload-step-item.done {
+  color: #43a047;
+}
+
+.upload-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #dce3ed;
+  flex-shrink: 0;
+  transition: background-color 0.3s;
+}
+
+.upload-step-item.active .upload-step-dot {
+  background-color: #2196f3;
+}
+
+.upload-step-item.done .upload-step-dot {
+  background-color: #43a047;
+}
+
+/* Error hint */
+.upload-error-hint {
+  font-size: 0.75rem;
+  color: #ef5350;
+  margin-top: 0.25rem;
+  opacity: 0.8;
+}
+
 /* Hide left panel on small screens */
 @media (max-width: 768px) {
   .upload-left {
