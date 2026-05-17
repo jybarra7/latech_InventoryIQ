@@ -256,6 +256,31 @@ def add_derived_fields(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_sorted_filter_values(df: pd.DataFrame, column_name: str) -> list:
+    """Andrew Garcia Leopold: return clean sorted values for one dashboard filter."""
+    if column_name not in df.columns:
+        return []
+
+    values = df[column_name].dropna().unique().tolist()
+    try:
+        return sorted(values)
+    except TypeError:
+        return sorted(values, key=lambda value: str(value))
+
+
+def generate_filter_options(df: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: build store, region, category, and date filter options."""
+    date_values = pd.to_datetime(df["date"], errors="coerce").dropna()
+
+    return {
+        "stores": get_sorted_filter_values(df, "store_id"),
+        "categories": get_sorted_filter_values(df, "category"),
+        "regions": get_sorted_filter_values(df, "region"),
+        "start_date": date_values.min() if not date_values.empty else None,
+        "end_date": date_values.max() if not date_values.empty else None,
+    }
+
+
 # -------------------------
 # MAIN CLEANING PIPELINE
 # -------------------------

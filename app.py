@@ -43,13 +43,21 @@ except ImportError:
         return pd.DataFrame()
 
 try:
-    from processor import infer_column_mapping, map_to_clean_schema, get_feature_flags, validate_uploaded_data
+    from processor import infer_column_mapping, map_to_clean_schema, get_feature_flags, validate_uploaded_data, generate_filter_options
     from ai_summary import build_payload, generate_summary
 except ImportError:
     def infer_column_mapping(df): return {col: col for col in df.columns}
     def map_to_clean_schema(df): return df
     def get_feature_flags(df): return {"profit": "Profit data missing", "region": "Region data missing", "transaction_count": "Transaction count missing"}
     def validate_uploaded_data(df): return {col: col for col in df.columns}
+    def generate_filter_options(df):
+        return {
+            "stores": sorted(df["store_id"].dropna().unique().tolist()),
+            "categories": sorted(df["category"].dropna().unique().tolist()),
+            "regions": sorted(df["region"].dropna().unique().tolist()) if "region" in df.columns else [],
+            "start_date": df["date"].min(),
+            "end_date": df["date"].max(),
+        }
     def build_payload(**kwargs): return {}
     def generate_summary(payload): return {"status": "error", "message": "AI module unavailable"}
 
@@ -991,8 +999,9 @@ if 'reset_counter' not in st.session_state:
 
 # Date range always covers all available data — the forecast horizon slider
 # controls how far the orange projection line extends, not the date range.
-start_date = df['date'].min()
-end_date   = df['date'].max()
+filter_options = generate_filter_options(df)
+start_date = filter_options["start_date"]
+end_date   = filter_options["end_date"]
 
 # Forecast horizon — controls how many months of predictions are shown
 # on the chart and summed in the Projected Revenue KPI card.
@@ -1010,14 +1019,14 @@ projection_days_map = {
 projection_days = projection_days_map[projection_option]
 
 # Store filter — all stores selected by default
-stores = sorted(df['store_id'].unique())
+stores = filter_options["stores"]
 selected_stores = st.sidebar.multiselect(
     "Store", options=stores, default=stores,
     key=f"stores_{st.session_state.reset_counter}"
 )
 
 # Category filter — all categories selected by default
-categories = sorted(df['category'].unique())
+categories = filter_options["categories"]
 selected_categories = st.sidebar.multiselect(
     "Category", options=categories, default=categories,
     key=f"categories_{st.session_state.reset_counter}"
@@ -1028,7 +1037,7 @@ selected_categories = st.sidebar.multiselect(
 # Graceful degradation. Hide geographic filters if region is absent
 
 if 'region' in df.columns:
-    regions = sorted(df['region'].unique())
+    regions = filter_options["regions"]
     selected_regions = st.sidebar.multiselect(
         "Region", options=regions,
         default=regions,
