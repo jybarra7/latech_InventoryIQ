@@ -1,0 +1,227 @@
+.upload-page {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  font-family: 'Google Sans', 'Roboto', sans-serif;
+  background-image: url('/UploadBackground.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ── Navbar ── */
+.upload-nav {
+  height: 125px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8eaed;
+  display: flex;
+  align-items: center;
+  padding: 0 3rem;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.upload-nav-logo {
+  height: 88px;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+/* ── Center ── */
+.upload-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+/* ── Card ── */
+.upload-card {
+  background-color: #ffffff;
+  border-radius: 20px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+}
+
+/* Header */
+.upload-header {
+  text-align: center;
+}
+
+.upload-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #202124;
+  margin-bottom: 0.5rem;
+}
+
+.upload-header p {
+  font-size: 0.95rem;
+  color: #5f6368;
+  line-height: 1.6;
+}
+
+/* Drop zone */
+.upload-dropzone {
+  border: 2px dashed #ceead6;
+  border-radius: 16px;
+  padding: 3.5rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: #f8faf8;
+}
+
+.upload-dropzone:hover {
+  border-color: #0f9d58;
+  background-color: #f0faf4;
+}
+
+.upload-dropzone.dragging {
+  border-color: #0f9d58;
+  background-color: #e6f4ea;
+  transform: scale(1.01);
+}
+
+.upload-dropzone.success {
+  border-color: #0f9d58;
+  border-style: solid;
+  background-color: #f8fff9;
+}
+
+/* Idle state */
+.upload-idle-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.upload-folder-icon {
+  font-size: 3.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.upload-main-text {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #202124;
+}
+
+.upload-sub-text {
+  font-size: 0.9rem;
+  color: #9aa0a6;
+}
+
+.upload-formats {
+  display: inline-block;
+  margin-top: 0.875rem;
+  background-color: #f1f3f4;
+  color: #5f6368;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #e0e0e0;
+}
+
+/* Success state */
+.upload-success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-success-icon {
+  width: 56px;
+  height: 56px;
+  background-color: #0f9d58;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.upload-success-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #202124;
+}
+
+.upload-success-size {
+  font-size: 0.8rem;
+  color: #9aa0a6;
+}
+
+/* Error */
+.upload-error {
+  background-color: #fce8e6;
+  border: 1px solid #f5c6c2;
+  border-radius: 10px;
+  padding: 0.875rem 1.25rem;
+  color: #d93025;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Button */
+.upload-btn {
+  width: 100%;
+  padding: 1.1rem;
+  border-radius: 12px;
+  border: none;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: 'Google Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-btn.active {
+  background-color: #0f9d58;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(15,157,88,0.3);
+}
+
+.upload-btn.active:hover {
+  background-color: #0b8043;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15,157,88,0.4);
+}
+
+.upload-btn.disabled {
+  background-color: #e8eaed;
+  color: #9aa0a6;
+  cursor: not-allowed;
+}
+
+/* Reassurance */
+.upload-reassurance {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.upload-reassurance span {
+  font-size: 0.78rem;
+  color: #9aa0a6;
+}
