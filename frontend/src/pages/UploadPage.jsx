@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
+import { runForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
 
 function UploadPage() {
@@ -8,6 +9,8 @@ function UploadPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState(null)
   const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
 
   const validTypes = [
     'text/csv',
@@ -38,19 +41,37 @@ function UploadPage() {
   function handleDrop(e) {
     e.preventDefault()
     setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    handleFile(file)
+    handleFile(e.dataTransfer.files[0])
   }
 
   function handleInputChange(e) {
-    const file = e.target.files[0]
-    handleFile(file)
+    handleFile(e.target.files[0])
   }
 
-  function handleContinue() {
-    if (!uploadedFile) return
-    // Mira's API call will go here — for now navigate to dashboard
-    navigate('/dashboard')
+  async function handleContinue() {
+    if (!uploadedFile || loading) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      setLoadingStep('Running forecast model...')
+      await runForecast(uploadedFile, 90)
+
+      setLoadingStep('Calculating KPIs...')
+      await getForecastKpis(uploadedFile, 30)
+
+      setLoadingStep('Scanning for alerts...')
+      await runAlerts(uploadedFile)
+
+      setLoadingStep('Almost there...')
+      navigate('/dashboard')
+
+    } catch (err) {
+      setError(parseApiError(err))
+      setLoading(false)
+      setLoadingStep('')
+    }
   }
 
   return (
@@ -61,84 +82,120 @@ function UploadPage() {
         <img
           src="/logo.webp"
           alt="InventoryIQ"
-          className="upload-logo"
-          onClick={() => navigate('/')}
-          style={{ cursor: 'pointer' }}
+          className="upload-nav-logo"
+          onClick={() => !loading && navigate('/')}
+          style={{ cursor: loading ? 'default' : 'pointer' }}
         />
       </nav>
 
-      {/* Robot illustration */}
-      <div className="upload-robot">
-        <img src="/robot.png" alt="" className="upload-robot-img" />
-      </div>
+      {/* Centered card */}
+      <div className="upload-center">
+        <div className="upload-card">
 
-      {/* Main content */}
-      <div className="upload-content">
-        <div className="upload-header">
-          <h1>Upload Your Data</h1>
-          <p>Drop your retail CSV or Excel file to get started. We handle the rest.</p>
-        </div>
+          {loading ? (
 
-        {/* Drop zone */}
-        <div
-          className={`upload-dropzone ${isDragging ? 'upload-dropzone-active' : ''} ${uploadedFile ? 'upload-dropzone-success' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={handleInputChange}
-            style={{ display: 'none' }}
-          />
-
-          {uploadedFile ? (
-            <div className="upload-success">
-              <div className="upload-success-icon">✓</div>
-              <p className="upload-success-name">{uploadedFile.name}</p>
-              <p className="upload-success-size">
-                {(uploadedFile.size / 1024).toFixed(1)} KB · Click to change file
-              </p>
+            /* ── Loading state ── */
+            <div className="upload-loading">
+              <div className="upload-spinner" />
+              <p className="upload-loading-title">Analyzing your data</p>
+              <p className="upload-loading-step">{loadingStep}</p>
+              <div className="upload-loading-steps">
+                <div className={`upload-step-item ${loadingStep.includes('forecast') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Running forecast model</span>
+                </div>
+                <div className={`upload-step-item ${loadingStep.includes('KPI') ? 'active' : ''} ${loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Calculating KPIs</span>
+                </div>
+                <div className={`upload-step-item ${loadingStep.includes('alert') ? 'active' : ''} ${loadingStep.includes('Almost') ? 'done' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Scanning for alerts</span>
+                </div>
+                <div className={`upload-step-item ${loadingStep.includes('Almost') ? 'active' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Preparing dashboard</span>
+                </div>
+              </div>
             </div>
+
           ) : (
-            <div className="upload-placeholder">
-              <div className="upload-icon">📂</div>
-              <p className="upload-main-text">
-                {isDragging ? 'Drop it here!' : 'Drag & drop your file here'}
-              </p>
-              <p className="upload-sub-text">or click to browse</p>
-              <span className="upload-formats">CSV · XLSX</span>
-            </div>
+
+            /* ── Upload state ── */
+            <>
+              <div className="upload-header">
+                <h1>Upload Your Data</h1>
+                <p>Drop your retail CSV or Excel file.<br />We handle the rest.</p>
+              </div>
+
+              {/* Drop zone */}
+              <div
+                className={`upload-dropzone ${isDragging ? 'dragging' : ''} ${uploadedFile ? 'success' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx"
+                  onChange={handleInputChange}
+                  style={{ display: 'none' }}
+                />
+
+                {uploadedFile ? (
+                  <div className="upload-success-state">
+                    <div className="upload-success-icon">✓</div>
+                    <p className="upload-success-name">{uploadedFile.name}</p>
+                    <p className="upload-success-size">
+                      {(uploadedFile.size / 1024).toFixed(1)} KB · Click to change
+                    </p>
+                  </div>
+                ) : (
+                  <div className="upload-idle-state">
+                    <div className="upload-folder-icon">📂</div>
+                    <p className="upload-main-text">
+                      {isDragging ? 'Drop it here!' : 'Drag & drop your file here'}
+                    </p>
+                    <p className="upload-sub-text">or click to browse</p>
+                    <span className="upload-formats">CSV · XLSX</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="upload-error">
+                  ⚠️ {error}
+                  <p className="upload-error-hint">
+                    Make sure the backend is running at localhost:8000
+                  </p>
+                </div>
+              )}
+
+              {/* Button */}
+              <button
+                className={`upload-btn ${uploadedFile ? 'active' : 'disabled'}`}
+                onClick={handleContinue}
+                disabled={!uploadedFile}
+              >
+                {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
+              </button>
+
+              {/* Reassurance */}
+              <div className="upload-reassurance">
+                <span>✓ Auto column detection</span>
+                <span>✓ No formatting needed</span>
+                <span>✓ CSV & Excel supported</span>
+              </div>
+            </>
+
           )}
+
         </div>
-
-        {/* Error */}
-        {error && (
-          <div className="upload-error">
-            ⚠️ {error}
-          </div>
-        )}
-
-        {/* Continue button */}
-        <button
-          className={`upload-btn ${uploadedFile ? 'upload-btn-active' : 'upload-btn-disabled'}`}
-          onClick={handleContinue}
-          disabled={!uploadedFile}
-        >
-          {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
-        </button>
-
-        {/* Reassurance */}
-        <div className="upload-reassurance">
-          <span>✓ Columns detected automatically</span>
-          <span>✓ No formatting required</span>
-          <span>✓ CSV and Excel supported</span>
-        </div>
-
       </div>
+
     </div>
   )
 }

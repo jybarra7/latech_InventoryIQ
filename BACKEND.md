@@ -2,7 +2,7 @@
 
 ## Running Locally
 
-# in bash
+```bash
 git clone https://github.com/jybarra7/latech_InventoryIQ
 cd latech_InventoryIQ
 python3 -m venv venv
@@ -12,10 +12,11 @@ pip install fastapi uvicorn python-multipart
 # add GEMINI_API_KEY to your .env locally
 uvicorn main:app --reload
 # interactive docs at http://localhost:8000/docs
+```
 
 ---
 
-# Current Endpoints
+## Current Endpoints
 
 | Method | Route | Description |
 |---|---|---|
@@ -29,12 +30,11 @@ All POST endpoints accept a retail CSV uploaded as multipart form data.
 
 ---
 
-### Request / Response Examples
+## Request / Response Examples
 
-## POST `/forecast/run`
-# Request: multipart form upload of retail CSV
+### POST `/forecast/run`
+Request: multipart form upload of retail CSV
 
-# Response:
 ```json
 {
   "winner": "lightgbm_global_lag",
@@ -54,10 +54,9 @@ All POST endpoints accept a retail CSV uploaded as multipart form data.
 
 ---
 
-## POST `/forecast/future`
-# Request: multipart form upload of retail CSV + optional `?future_days=30`
+### POST `/forecast/future`
+Request: multipart form upload of retail CSV + optional `?future_days=30`
 
-# Response:
 ```json
 {
   "method": "lightgbm_global_lag",
@@ -78,10 +77,9 @@ All POST endpoints accept a retail CSV uploaded as multipart form data.
 
 ---
 
-## POST `/forecast/kpis`
-# Request: multipart form upload of retail CSV + optional `?future_days=30`
+### POST `/forecast/kpis`
+Request: multipart form upload of retail CSV + optional `?future_days=30`
 
-# Response:
 ```json
 {
   "total_sales": 47704512.0,
@@ -91,15 +89,45 @@ All POST endpoints accept a retail CSV uploaded as multipart form data.
 }
 ```
 
-**Note:** `winner_model` and `mae` currently require `/forecast/run` to be called first. 
-## Known issue — needs a small wiring fix ##
+> **Note:** `winner_model` and `mae` currently require `/forecast/run` to be called first — known issue, needs a small wiring fix.
+
+---
+
+### POST `/alerts/run`
+Request: multipart form upload of retail CSV + optional query params `?anomaly_std=2.0&decline_pct=0.20&margin_floor=0.0`
+
+```json
+{
+  "alerts": [
+    {
+      "product_id": 4,
+      "product_name": "Item 4",
+      "alert_type": "Sales Anomaly",
+      "severity": 2.4,
+      "metric": "Sales of 35 is 2.4 std devs from 90-day mean of 21.3"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## Confirmed JSON Keys
+
+| Service Function | Key Fields |
+|---|---|
+| `run_forecast_pipeline()` | `winner`, `metrics.mae`, `metrics.rmse`, `metrics.mase`, `comparison_table[].method_name` |
+| `get_future_forecast()` | `method`, `future_days`, `forecast_records[].date/store/item/prediction` |
+| `shape_kpi_payload()` | `total_sales`, `forecast_direction`, `winner_model`, `mae` |
+| `run_all_alerts()` | `alerts[].product_id/product_name/alert_type/severity/metric`, `total` |
 
 ---
 
 ## What's Still Missing for Full Dashboard Parity
 
-| Endpoint          |            Description                    |    Owner |
-|--------------------|------------------------------------------|--------------|
+| Endpoint | Description | Owner |
+|---|---|---|
 | `POST /summary/generate` | Gemini AI summary — wraps `utils/ai_summary.py` | TBD |
 | `POST /data/upload` | Schema mapping and retail_clean generation | Andrew |
 | Filter support | Server-side filtering by date, category, store | TBD |
