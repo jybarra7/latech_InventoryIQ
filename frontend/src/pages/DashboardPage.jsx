@@ -58,12 +58,6 @@ function fmt(n) {
   return `$${n}`
 }
 
-const NAV_ITEMS = [
-  { id: 'overview', icon: '📊', label: 'Overview'  },
-  { id: 'products', icon: '🏆', label: 'Products'  },
-  { id: 'analysis', icon: '📈', label: 'Analysis'  },
-]
-
 const HORIZONS = ['Next 30 days', 'Next 90 days', 'Next 6 months', 'Next 12 months']
 
 function DashboardPage() {
@@ -73,6 +67,7 @@ function DashboardPage() {
   const [horizon, setHorizon] = useState('Next 90 days')
   const [selectedStores, setSelectedStores] = useState([])
   const [selectedCategories, setSelectedCategories] = useState([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const apiState = location.state
   const kpis       = apiState?.kpiData    ?? mockData.kpis
@@ -114,17 +109,13 @@ function DashboardPage() {
 
   function toggleStore(store) {
     setSelectedStores(prev =>
-      prev.includes(store)
-        ? prev.filter(s => s !== store)
-        : [...prev, store]
+      prev.includes(store) ? prev.filter(s => s !== store) : [...prev, store]
     )
   }
 
   function toggleCategory(cat) {
     setSelectedCategories(prev =>
-      prev.includes(cat)
-        ? prev.filter(c => c !== cat)
-        : [...prev, cat]
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
     )
   }
 
@@ -141,23 +132,31 @@ function DashboardPage() {
   return (
     <div className="db">
 
-      {/* ── Sidebar ── */}
-      <aside className="db-sidebar">
+      {/* Overlay */}
+      <div
+        className={`db-sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
 
-        {/* Logo */}
+      {/* ── Sidebar ── */}
+      <aside className={`db-sidebar ${sidebarOpen ? 'open' : ''}`}>
+
         <div className="db-sidebar-logo" onClick={() => navigate('/')}>
           <img src="/logo.webp" alt="InventoryIQ" className="db-sidebar-logo-img" />
         </div>
 
-        {/* Nav */}
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">Menu</p>
           <nav className="db-nav">
-            {NAV_ITEMS.map(item => (
+            {[
+              { id: 'overview', icon: '📊', label: 'Overview'  },
+              { id: 'products', icon: '🏆', label: 'Products'  },
+              { id: 'analysis', icon: '📈', label: 'Analysis'  },
+            ].map(item => (
               <button
                 key={item.id}
                 className={`db-nav-btn ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
               >
                 <span className="db-nav-icon">{item.icon}</span>
                 <span>{item.label}</span>
@@ -167,7 +166,6 @@ function DashboardPage() {
           </nav>
         </div>
 
-        {/* Horizon filter */}
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">Forecast Horizon</p>
           <div className="db-radio-group">
@@ -186,7 +184,6 @@ function DashboardPage() {
           </div>
         </div>
 
-        {/* Store filter */}
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">
             Stores
@@ -208,7 +205,6 @@ function DashboardPage() {
           </div>
         </div>
 
-        {/* Category filter */}
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">
             Categories
@@ -230,7 +226,6 @@ function DashboardPage() {
           </div>
         </div>
 
-        {/* Reset + bottom */}
         <div className="db-sidebar-bottom">
           {hasActiveFilters && (
             <button className="db-reset-btn" onClick={resetFilters}>
@@ -251,17 +246,22 @@ function DashboardPage() {
       {/* ── Main ── */}
       <div className="db-main">
         <header className="db-header">
-          <div className="db-header-left">
-            <h1 className="db-header-title">
-              {activeTab === 'overview' && 'Dashboard Overview'}
-              {activeTab === 'products' && 'Products'}
-              {activeTab === 'analysis' && 'Analysis'}
-            </h1>
-            <p className="db-header-sub">
-              {activeTab === 'overview' && 'Your retail performance at a glance'}
-              {activeTab === 'products' && 'Top and bottom performing products'}
-              {activeTab === 'analysis' && 'Category trends and store performance'}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button className="db-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              ☰
+            </button>
+            <div className="db-header-left">
+              <h1 className="db-header-title">
+                {activeTab === 'overview' && 'Dashboard Overview'}
+                {activeTab === 'products' && 'Products'}
+                {activeTab === 'analysis' && 'Analysis'}
+              </h1>
+              <p className="db-header-sub">
+                {activeTab === 'overview' && 'Your retail performance at a glance'}
+                {activeTab === 'products' && 'Top and bottom performing products'}
+                {activeTab === 'analysis' && 'Category trends and store performance'}
+              </p>
+            </div>
           </div>
           <button className="db-ai-btn">✦ AI Summary</button>
         </header>
@@ -305,6 +305,7 @@ function OverviewTab({ data, horizon }) {
       </div>
 
       <div className="kpi-grid">
+
         <div className="kpi-hero">
           <div className="kpi-hero-bg" />
           <p className="kpi-hero-label">Total Revenue</p>
@@ -336,9 +337,11 @@ function OverviewTab({ data, horizon }) {
           <p className="kpi-value">{projectedRevenue()}</p>
           <p className="kpi-delta kpi-neutral">→ {horizon}</p>
         </div>
+
       </div>
 
       <div className="bottom-row">
+
         <div className="panel">
           <p className="panel-title">Sales Forecast</p>
           <p className="panel-sub">Historical performance vs projected growth</p>
@@ -397,7 +400,6 @@ function OverviewTab({ data, horizon }) {
               const plainEnglish = isDown
                 ? `⚠️ Sales have unexpectedly dropped — this item may need attention`
                 : `✅ Sales have unexpectedly spiked — this item is performing above normal`
-
               return (
                 <div key={i} className="alert-row" style={{
                   borderLeftColor: borderColor,
@@ -423,8 +425,8 @@ function OverviewTab({ data, horizon }) {
             })}
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   )
 }
@@ -486,7 +488,7 @@ function ProductsTab({ data }) {
   )
 }
 
-// ── ANALYSIS ──────────────────────────────────────────────────────────────────
+// ── ANALYSIS ──────────────────────────────────────────════════════════════════
 function AnalysisTab() {
   return (
     <div className="tab">
