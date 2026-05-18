@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import './DashboardPage.css'
 
@@ -22,17 +22,17 @@ const mockData = {
     total: 5
   },
   forecastChart: [
-    { month: 'Aug', value: 3200 },
-    { month: 'Sep', value: 2900 },
-    { month: 'Oct', value: 3100 },
-    { month: 'Nov', value: 2800 },
-    { month: 'Dec', value: 3400 },
-    { month: 'Jan', value: 3600 },
-    { month: 'Feb', value: 3500 },
-    { month: 'Mar', value: 3800 },
-    { month: 'Apr', value: 4100, projected: true },
-    { month: 'May', value: 4400, projected: true },
-    { month: 'Jun', value: 4700, projected: true },
+    { date: 'Aug', value: 3200 },
+    { date: 'Sep', value: 2900 },
+    { date: 'Oct', value: 3100 },
+    { date: 'Nov', value: 2800 },
+    { date: 'Dec', value: 3400 },
+    { date: 'Jan', value: 3600 },
+    { date: 'Feb', value: 3500 },
+    { date: 'Mar', value: 3800 },
+    { date: 'Apr', value: 4100 },
+    { date: 'May', value: 4400 },
+    { date: 'Jun', value: 4700 },
   ],
   topProducts: [
     { product: 'Item 15', total_sales: 1607442 },
@@ -66,11 +66,49 @@ const NAV_ITEMS = [
 
 function DashboardPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('overview')
   const [horizon, setHorizon] = useState('Next 90 days')
   const [selectedStore, setSelectedStore] = useState('All Stores')
   const [selectedCategory, setSelectedCategory] = useState('All Categories')
-  const data = mockData
+
+  const apiState = location.state
+  const kpis       = apiState?.kpiData    ?? mockData.kpis
+  const alertsData = apiState?.alertsData ?? mockData.alertsData
+  const fileName   = apiState?.fileName   ?? mockData.fileName
+
+  const forecastChart = apiState?.forecastData?.forecast_records
+    ? (() => {
+        const records = apiState.forecastData.forecast_records
+        const byMonth = {}
+        records.forEach(r => {
+          const month = r.date.slice(0, 7)
+          if (!byMonth[month]) byMonth[month] = { total: 0, count: 0, actual: 0, actualCount: 0 }
+          byMonth[month].total += r.prediction
+          byMonth[month].count += 1
+          if (r.actual) {
+            byMonth[month].actual += r.actual
+            byMonth[month].actualCount += 1
+          }
+        })
+        return Object.entries(byMonth)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-12)
+          .map(([month, data]) => ({
+            date: month,
+            value: Math.round(data.total / data.count),
+            actual: data.actualCount > 0 ? Math.round(data.actual / data.actualCount) : null,
+          }))
+      })()
+    : mockData.forecastChart
+
+  const data = {
+    ...mockData,
+    kpis,
+    alertsData,
+    fileName,
+    forecastChart,
+  }
 
   return (
     <div className="db">
@@ -100,8 +138,6 @@ function DashboardPage() {
 
       {/* ── Main ── */}
       <div className="db-main">
-
-        {/* Header */}
         <header className="db-header">
           <div className="db-header-left">
             <h1 className="db-header-title">
@@ -133,13 +169,11 @@ function DashboardPage() {
           </div>
         </header>
 
-        {/* Content */}
         <div className="db-content">
           {activeTab === 'overview' && <OverviewTab data={data} />}
           {activeTab === 'products' && <ProductsTab data={data} />}
           {activeTab === 'analysis' && <AnalysisTab />}
         </div>
-
       </div>
     </div>
   )
@@ -148,8 +182,8 @@ function DashboardPage() {
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
 function OverviewTab({ data }) {
   const { kpis, alertsData, forecastChart } = data
-  const alerts = alertsData.alerts
-  const bad = alerts.filter(a => a.metric.includes('below'))
+  const alerts = alertsData?.alerts ?? []
+  const bad = alerts.filter(a => a.severity >= 1.5)
 
   return (
     <div className="tab">
@@ -170,7 +204,9 @@ function OverviewTab({ data }) {
           <div className="kpi-hero-bg" />
           <p className="kpi-hero-label">Total Revenue</p>
           <p className="kpi-hero-value">{fmt(kpis.total_sales)}</p>
-          <div className="kpi-hero-badge" style={{textTransform:'capitalize'}}>▲ {kpis.forecast_direction}</div>
+          <div className="kpi-hero-badge" style={{textTransform:'capitalize'}}>
+            ▲ {kpis.forecast_direction}
+          </div>
         </div>
         <div className="kpi-card">
           <p className="kpi-label">Sales Trend</p>
@@ -179,7 +215,7 @@ function OverviewTab({ data }) {
         </div>
         <div className="kpi-card">
           <p className="kpi-label">Active Alerts</p>
-          <p className="kpi-value">{alertsData.total}</p>
+          <p className="kpi-value">{alertsData?.total ?? 0}</p>
           <p className="kpi-delta kpi-down">{bad.length} need attention</p>
         </div>
         <div className="kpi-card">
@@ -196,27 +232,53 @@ function OverviewTab({ data }) {
         <div className="panel">
           <p className="panel-title">Sales Forecast</p>
           <p className="panel-sub">Historical performance vs projected growth</p>
+          <div className="chart-legend">
+            <span><span className="chart-dot chart-dot-navy" />Actual Sales</span>
+            <span><span className="chart-dot chart-dot-blue" />Forecast</span>
+          </div>
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}`} />
+              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 60, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: '#8aaac8' }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={Math.floor(forecastChart.length / 8)}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#8aaac8' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={v => `${v.toLocaleString()}`}
+                  width={80}
+                />
                 <Tooltip
                   contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: '#1e3a5f', fontWeight: 600 }}
+                  formatter={(value, name) => [
+                    `${value.toLocaleString()} units`,
+                    name === 'value' ? '📈 Forecast' : '📊 Actual'
+                  ]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="actual"
+                  stroke="#1e3a5f"
+                  strokeWidth={2}
+                  dot={false}
+                  name="actual"
                 />
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#64B5F6"
+                  stroke="#2196f3"
                   strokeWidth={2.5}
-                  dot={(props) => {
-                    const { cx, cy, payload } = props
-                    if (payload.projected) return null
-                    return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill="#64B5F6" strokeWidth={0} />
-                  }}
-                  activeDot={{ r: 6, fill: '#1e3a5f' }}
+                  dot={false}
+                  name="value"
+                  strokeDasharray="5 5"
+                  activeDot={{ r: 5, fill: '#2196f3' }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -228,13 +290,14 @@ function OverviewTab({ data }) {
           <div className="panel-header-row">
             <div>
               <p className="panel-title">Alert Center</p>
-              <p className="panel-sub">{alertsData.total} active alerts</p>
+              <p className="panel-sub">{alertsData?.total ?? 0} active alerts</p>
             </div>
-            <span className="badge-red">{alertsData.total} Active</span>
+            <span className="badge-red">{alertsData?.total ?? 0} Active</span>
           </div>
           <div className="alert-list">
-            {alerts.map((a, i) => {
-              const isUp = a.metric.includes('above')
+            {alerts.length === 0 ? (
+              <p style={{color:'#8aaac8', fontSize:'0.82rem', padding:'1rem 0'}}>No alerts detected</p>
+            ) : alerts.map((a, i) => {
               const severityColor = a.severity >= 2 ? '#ef4444' : '#f59e0b'
               return (
                 <div key={i} className="alert-row" style={{ borderLeftColor: severityColor }}>
