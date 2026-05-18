@@ -1,40 +1,39 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import './DashboardPage.css'
 
 const mockData = {
   fileName: 'retail_clean.csv',
-
   kpis: {
     total_sales: 47704512.0,
     forecast_direction: 'increasing',
     winner_model: 'lightgbm_global_lag',
     mae: 5.882,
   },
-
   alertsData: {
     alerts: [
       { product_id: 5,  product_name: 'Item 5',  alert_type: 'Sales Anomaly',  severity: 2.4, metric: 'Sales of 12 is 2.4 std devs below 90-day mean of 35.1' },
       { product_id: 1,  product_name: 'Item 1',  alert_type: 'Demand Decline', severity: 1.8, metric: 'Sales of 15 is 1.8 std devs below 90-day mean of 28.4' },
-      { product_id: 41, product_name: 'Item 41', alert_type: 'Demand Decline', severity: 1.5, metric: 'Sales of 18 is 1.5 std devs below 90-day mean of 30.2' },
+      { product_id: 41, product_name: 'Item 41', alert_type: 'Demand Decline', severity: 1.6, metric: 'Sales of 18 is 1.5 std devs below 90-day mean of 30.2' },
       { product_id: 15, product_name: 'Item 15', alert_type: 'Sales Anomaly',  severity: 2.1, metric: 'Sales of 58 is 2.1 std devs above 90-day mean of 31.2' },
       { product_id: 28, product_name: 'Item 28', alert_type: 'Sales Anomaly',  severity: 1.9, metric: 'Sales of 52 is 1.9 std devs above 90-day mean of 29.8' },
     ],
     total: 5
   },
-
-  forecastData: {
-    method: 'lightgbm_global_lag',
-    future_days: 30,
-    forecast_records: [
-      { date: '2018-01-01', store: 1, item: 1, actual: 42.0, prediction: 44.2 },
-      { date: '2018-01-02', store: 1, item: 1, actual: 38.0, prediction: 40.1 },
-      { date: '2018-01-03', store: 1, item: 1, actual: 45.0, prediction: 43.8 },
-      { date: '2018-01-04', store: 1, item: 1, actual: null, prediction: 46.5 },
-      { date: '2018-01-05', store: 1, item: 1, actual: null, prediction: 48.2 },
-    ]
-  },
-
+  forecastChart: [
+    { month: 'Aug', value: 3200 },
+    { month: 'Sep', value: 2900 },
+    { month: 'Oct', value: 3100 },
+    { month: 'Nov', value: 2800 },
+    { month: 'Dec', value: 3400 },
+    { month: 'Jan', value: 3600 },
+    { month: 'Feb', value: 3500 },
+    { month: 'Mar', value: 3800 },
+    { month: 'Apr', value: 4100, projected: true },
+    { month: 'May', value: 4400, projected: true },
+    { month: 'Jun', value: 4700, projected: true },
+  ],
   topProducts: [
     { product: 'Item 15', total_sales: 1607442 },
     { product: 'Item 28', total_sales: 1604713 },
@@ -49,7 +48,6 @@ const mockData = {
     { product: 'Item 47', total_sales: 401781 },
     { product: 'Item 4',  total_sales: 401907 },
   ],
-
   categories: ['Electronics', 'Food', 'Clothing', 'Home'],
   stores: ['Store 1', 'Store 2', 'Store 3', 'Store 4', 'Store 5'],
 }
@@ -59,6 +57,12 @@ function fmt(n) {
   if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`
   return `$${n}`
 }
+
+const NAV_ITEMS = [
+  { id: 'overview', icon: '📊' },
+  { id: 'products', icon: '🏆' },
+  { id: 'analysis', icon: '📈' },
+]
 
 function DashboardPage() {
   const navigate = useNavigate()
@@ -71,81 +75,35 @@ function DashboardPage() {
   return (
     <div className="db">
 
-      {/* ── Sidebar ── */}
-      <aside className="db-sidebar">
-        <div className="db-sidebar-logo">
-          <img src="/logo.webp" alt="InventoryIQ" className="db-logo" onClick={() => navigate('/')} />
+      {/* ── Icon rail sidebar ── */}
+      <aside className="db-rail">
+        <div className="db-rail-logo" onClick={() => navigate('/')}>
+          <span className="db-rail-logo-text">IQ</span>
         </div>
-
-        <div className="db-sidebar-section">
-          <p className="db-sidebar-label">Menu</p>
-          <nav className="db-nav">
-            {[
-              { id: 'overview', icon: '📊', label: 'Overview' },
-              { id: 'products', icon: '🏆', label: 'Products' },
-              { id: 'analysis', icon: '📈', label: 'Analysis' },
-            ].map(item => (
-              <button
-                key={item.id}
-                className={`db-nav-btn ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(item.id)}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-                {activeTab === item.id && <span className="db-nav-pip" />}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="db-sidebar-section">
-          <p className="db-sidebar-label">Filters</p>
-          <div className="db-filter">
-            <label>Horizon</label>
-            <select value={horizon} onChange={e => setHorizon(e.target.value)}>
-              <option>Next 30 days</option>
-              <option>Next 90 days</option>
-              <option>Next 6 months</option>
-              <option>Next 12 months</option>
-            </select>
-          </div>
-          <div className="db-filter">
-            <label>Store</label>
-            <select value={selectedStore} onChange={e => setSelectedStore(e.target.value)}>
-              <option>All Stores</option>
-              {data.stores.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div className="db-filter">
-            <label>Category</label>
-            <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
-              <option>All Categories</option>
-              {data.categories.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <button className="db-reset" onClick={() => {
-            setHorizon('Next 90 days')
-            setSelectedStore('All Stores')
-            setSelectedCategory('All Categories')
-          }}>↺ Reset Filters</button>
-        </div>
-
-        <div className="db-sidebar-bottom">
-          <p className="db-sidebar-label">Data Source</p>
-          <div className="db-file-chip">
-            <span>📄</span>
-            <span className="db-file-name">{data.fileName}</span>
-          </div>
-          <button className="db-new-file" onClick={() => navigate('/upload')}>
-            + Upload New File
-          </button>
+        <nav className="db-rail-nav">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              className={`db-rail-btn ${activeTab === item.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(item.id)}
+              title={item.id.charAt(0).toUpperCase() + item.id.slice(1)}
+            >
+              {item.icon}
+            </button>
+          ))}
+        </nav>
+        <div className="db-rail-bottom">
+          <button className="db-rail-btn" onClick={() => navigate('/upload')} title="Upload New File">⬆</button>
+          <button className="db-rail-btn" title="Settings">⚙</button>
         </div>
       </aside>
 
       {/* ── Main ── */}
       <div className="db-main">
+
+        {/* Header */}
         <header className="db-header">
-          <div>
+          <div className="db-header-left">
             <h1 className="db-header-title">
               {activeTab === 'overview' && 'Dashboard Overview'}
               {activeTab === 'products' && 'Products'}
@@ -157,144 +115,140 @@ function DashboardPage() {
               {activeTab === 'analysis' && 'Category trends and store performance'}
             </p>
           </div>
-          <button className="db-ai-btn">✦ Generate AI Summary</button>
+          <div className="db-header-right">
+            <select className="db-filter-pill" value={selectedStore} onChange={e => setSelectedStore(e.target.value)}>
+              <option>All Stores</option>
+              {data.stores.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select className="db-filter-pill" value={horizon} onChange={e => setHorizon(e.target.value)}>
+              <option>Next 90 days</option>
+              <option>Next 30 days</option>
+              <option>Next 6 months</option>
+            </select>
+            <select className="db-filter-pill" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+              <option>All Categories</option>
+              {data.categories.map(c => <option key={c}>{c}</option>)}
+            </select>
+            <button className="db-ai-btn">✦ AI Summary</button>
+          </div>
         </header>
 
+        {/* Content */}
         <div className="db-content">
           {activeTab === 'overview' && <OverviewTab data={data} />}
           {activeTab === 'products' && <ProductsTab data={data} />}
           {activeTab === 'analysis' && <AnalysisTab />}
         </div>
-      </div>
 
+      </div>
     </div>
   )
 }
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
 function OverviewTab({ data }) {
-  const { kpis, alertsData } = data
+  const { kpis, alertsData, forecastChart } = data
   const alerts = alertsData.alerts
-  const bad  = alerts.filter(a => a.metric.includes('below'))
-  const good = alerts.filter(a => a.metric.includes('above'))
-  const aiHeadline = `Sales are ${kpis.forecast_direction} — model accuracy MAE ${kpis.mae}. ${bad.length} products need your attention.`
+  const bad = alerts.filter(a => a.metric.includes('below'))
 
   return (
     <div className="tab">
 
-      {/* AI Banner */}
-      <div className="ai-banner">
-        <div className="ai-banner-left">
-          <span className="ai-banner-icon">✦</span>
-          <div>
-            <p className="ai-banner-label">AI Insight</p>
-            <p className="ai-banner-text">{aiHeadline}</p>
-          </div>
-        </div>
-        <button className="ai-banner-btn">Generate Full Summary</button>
+      {/* AI Insight */}
+      <div className="ai-insight">
+        <span className="ai-insight-icon">✦</span>
+        <span className="ai-insight-label">AI INSIGHT</span>
+        <span className="ai-insight-text">
+          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae}. {bad.length} products need your attention.
+        </span>
+        <button className="ai-insight-btn">Full Summary</button>
       </div>
 
       {/* KPI Grid */}
       <div className="kpi-grid">
-
         <div className="kpi-hero">
-          <div className="kpi-hero-circle" />
-          <div className="kpi-hero-circle2" />
+          <div className="kpi-hero-bg" />
           <p className="kpi-hero-label">Total Revenue</p>
           <p className="kpi-hero-value">{fmt(kpis.total_sales)}</p>
-          <p className="kpi-hero-sub">All stores combined</p>
-          <div className="kpi-hero-badge" style={{textTransform: 'capitalize'}}>▲ {kpis.forecast_direction}</div>
+          <div className="kpi-hero-badge" style={{textTransform:'capitalize'}}>▲ {kpis.forecast_direction}</div>
         </div>
-
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <p className="kpi-card-label">Sales Trend</p>
-            <div className="kpi-card-icon-wrap kpi-icon-blue">📈</div>
-          </div>
-          <p className="kpi-card-value" style={{textTransform: 'capitalize'}}>{kpis.forecast_direction}</p>
-          <p className="kpi-card-delta delta-up">▲ Trending up</p>
-          <p className="kpi-card-period">based on LightGBM forecast</p>
+          <p className="kpi-label">Sales Trend</p>
+          <p className="kpi-value" style={{textTransform:'capitalize'}}>{kpis.forecast_direction}</p>
+          <p className="kpi-delta kpi-up">▲ Trending up</p>
         </div>
-
-        <div className="kpi-card kpi-card-alert">
-          <div className="kpi-card-header">
-            <p className="kpi-card-label">Active Alerts</p>
-            <div className="kpi-card-icon-wrap kpi-icon-red">🚨</div>
-          </div>
-          <p className="kpi-card-value">{alertsData.total}</p>
-          <p className="kpi-card-delta delta-down">⚠ {bad.length} need attention</p>
-          <p className="kpi-card-period">vs previous 30 days</p>
-        </div>
-
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <p className="kpi-card-label">Model Accuracy</p>
-            <div className="kpi-card-icon-wrap kpi-icon-navy">🎯</div>
-          </div>
-          <p className="kpi-card-value">MAE {kpis.mae}</p>
-          <p className="kpi-card-delta delta-neutral">{kpis.winner_model}</p>
-          <p className="kpi-card-period">winning forecast model</p>
+          <p className="kpi-label">Active Alerts</p>
+          <p className="kpi-value">{alertsData.total}</p>
+          <p className="kpi-delta kpi-down">{bad.length} need attention</p>
         </div>
-
-      </div>
-
-      {/* Alert pills */}
-      <div className="alert-strip">
-        <span className="alert-strip-label">Live Alerts</span>
-        <div className="alert-pills">
-          {bad.map((a, i) => (
-            <span key={i} className="pill pill-red">📉 {a.product_name} · {a.alert_type}</span>
-          ))}
-          {good.map((a, i) => (
-            <span key={i} className="pill pill-blue">📈 {a.product_name} · {a.alert_type}</span>
-          ))}
+        <div className="kpi-card">
+          <p className="kpi-label">Model Accuracy</p>
+          <p className="kpi-value">MAE {kpis.mae}</p>
+          <p className="kpi-delta kpi-neutral">Best model</p>
         </div>
       </div>
 
       {/* Bottom row */}
       <div className="bottom-row">
-        <div className="card card-forecast">
-          <div className="card-header">
-            <div>
-              <p className="card-title">Sales Forecast</p>
-              <p className="card-sub">Historical performance vs projected growth</p>
-            </div>
-            <div className="card-legend">
-              <span><span className="dot dot-navy" />Historical</span>
-              <span><span className="dot dot-blue" />Projected</span>
-            </div>
-          </div>
-          <div className="chart-zone">
-            📈 Recharts forecast chart — Mira wires in here
+
+        {/* Forecast chart */}
+        <div className="panel">
+          <p className="panel-title">Sales Forecast</p>
+          <p className="panel-sub">Historical performance vs projected growth</p>
+          <div className="chart-wrap">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}`} />
+                <Tooltip
+                  contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: '#1e3a5f', fontWeight: 600 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#64B5F6"
+                  strokeWidth={2.5}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props
+                    if (payload.projected) return null
+                    return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill="#64B5F6" strokeWidth={0} />
+                  }}
+                  activeDot={{ r: 6, fill: '#1e3a5f' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="card card-alerts">
-          <div className="card-header">
+        {/* Alert list */}
+        <div className="panel">
+          <div className="panel-header-row">
             <div>
-              <p className="card-title">Alert Center</p>
-              <p className="card-sub">{alertsData.total} active alerts</p>
+              <p className="panel-title">Alert Center</p>
+              <p className="panel-sub">{alertsData.total} active alerts</p>
             </div>
             <span className="badge-red">{alertsData.total} Active</span>
           </div>
           <div className="alert-list">
             {alerts.map((a, i) => {
               const isUp = a.metric.includes('above')
+              const severityColor = a.severity >= 2 ? '#ef4444' : '#f59e0b'
               return (
-                <div key={i} className={`alert-row alert-${isUp ? 'up' : 'down'}`}>
-                  <span className="alert-emoji">{isUp ? '📈' : '📉'}</span>
+                <div key={i} className="alert-row" style={{ borderLeftColor: severityColor }}>
                   <div>
-                    <p className="alert-name">{a.product_name}</p>
-                    <p className="alert-detail">{a.alert_type} · severity {a.severity}</p>
-                    <p className="alert-metric">{a.metric}</p>
+                    <p className="alert-name">{a.product_name} · {a.alert_type}</p>
+                    <p className="alert-detail">Severity {a.severity}</p>
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   )
 }
@@ -304,79 +258,52 @@ function ProductsTab({ data }) {
   return (
     <div className="tab">
       <div className="two-col">
-        <div className="card">
-          <div className="card-header card-header-blue">
-            <div>
-              <p className="card-title">Top Performers</p>
-              <p className="card-sub">Products driving the most revenue</p>
-            </div>
-          </div>
-          {data.topProducts.map((row, i) => (
-            <div key={i} className="product-row">
-              <div className="product-left">
-                <span className="rank rank-blue">{i + 1}</span>
-                <span className="product-name">{row.product}</span>
+        <div className="panel">
+          <p className="panel-title">Top Performers</p>
+          <p className="panel-sub">Products driving the most revenue</p>
+          <div style={{marginTop: '1rem'}}>
+            {data.topProducts.map((row, i) => (
+              <div key={i} className="product-row">
+                <div className="product-left">
+                  <span className="rank rank-blue">{i + 1}</span>
+                  <span className="product-name">{row.product}</span>
+                </div>
+                <span className="product-val val-blue">{fmt(row.total_sales)}</span>
               </div>
-              <span className="product-val val-blue">{fmt(row.total_sales)}</span>
-            </div>
-          ))}
-          <div className="card-foot" />
+            ))}
+          </div>
         </div>
-
-        <div className="card">
-          <div className="card-header card-header-red">
-            <div>
-              <p className="card-title">Underperformers</p>
-              <p className="card-sub">Products generating the least revenue</p>
-            </div>
-          </div>
-          {data.bottomProducts.map((row, i) => (
-            <div key={i} className="product-row">
-              <div className="product-left">
-                <span className="rank rank-red">{i + 1}</span>
-                <span className="product-name">{row.product}</span>
+        <div className="panel">
+          <p className="panel-title">Underperformers</p>
+          <p className="panel-sub">Products generating the least revenue</p>
+          <div style={{marginTop: '1rem'}}>
+            {data.bottomProducts.map((row, i) => (
+              <div key={i} className="product-row">
+                <div className="product-left">
+                  <span className="rank rank-red">{i + 1}</span>
+                  <span className="product-name">{row.product}</span>
+                </div>
+                <span className="product-val val-red">{fmt(row.total_sales)}</span>
               </div>
-              <span className="product-val val-red">{fmt(row.total_sales)}</span>
-            </div>
-          ))}
-          <div className="card-foot" />
+            ))}
+          </div>
         </div>
       </div>
-
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <p className="card-title">Top 10 Products by Revenue</p>
-            <p className="card-sub">Your highest earning products across all stores</p>
-          </div>
-        </div>
-        <div className="chart-zone chart-tall">
-          📊 Recharts horizontal bar chart — Mira wires in here
-        </div>
+      <div className="panel">
+        <p className="panel-title">Top 10 Products by Revenue</p>
+        <p className="panel-sub">Your highest earning products</p>
+        <div className="chart-zone chart-tall">📊 Recharts bar chart — Mira wires in here</div>
       </div>
-
       <div className="two-col">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <p className="card-title">Top 5 Product Trends</p>
-              <p className="card-sub">Growing or declining month over month?</p>
-            </div>
-          </div>
-          <div className="chart-zone chart-tall">
-            📈 Recharts line chart — Mira wires in here
-          </div>
+        <div className="panel">
+          <p className="panel-title">Top 5 Product Trends</p>
+          <p className="panel-sub">Growing or declining month over month?</p>
+          <div className="chart-zone chart-tall">📈 Recharts line chart — Mira wires in here</div>
         </div>
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <p className="card-title">Month-over-Month</p>
-              <p className="card-sub">Biggest movers vs last month</p>
-            </div>
-          </div>
-          <div className="chart-zone chart-tall">
-            📊 MoM leaderboard — Mira wires in here
-          </div>
+        <div className="panel">
+          <p className="panel-title">Month-over-Month</p>
+          <p className="panel-sub">Biggest movers vs last month</p>
+          <div className="chart-zone chart-tall">📊 MoM leaderboard — Mira wires in here</div>
         </div>
       </div>
     </div>
@@ -387,27 +314,15 @@ function ProductsTab({ data }) {
 function AnalysisTab() {
   return (
     <div className="tab">
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <p className="card-title">Category Revenue Trends</p>
-            <p className="card-sub">Monthly revenue per category — see which are growing or declining</p>
-          </div>
-        </div>
-        <div className="chart-zone chart-tall">
-          📈 Recharts category trend lines — Mira wires in here
-        </div>
+      <div className="panel">
+        <p className="panel-title">Category Revenue Trends</p>
+        <p className="panel-sub">Monthly revenue per category</p>
+        <div className="chart-zone chart-tall">📈 Recharts category trends — Mira wires in here</div>
       </div>
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <p className="card-title">Store Comparison</p>
-            <p className="card-sub">Total revenue by store for selected filters</p>
-          </div>
-        </div>
-        <div className="chart-zone chart-tall">
-          📊 Recharts store bar chart — Mira wires in here
-        </div>
+      <div className="panel">
+        <p className="panel-title">Store Comparison</p>
+        <p className="panel-sub">Total revenue by store</p>
+        <div className="chart-zone chart-tall">📊 Recharts store bar chart — Mira wires in here</div>
       </div>
     </div>
   )
