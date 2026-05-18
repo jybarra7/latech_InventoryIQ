@@ -3,17 +3,18 @@
   width: 100vw;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: fixed;
   top: 0;
   left: 0;
-  font-family: 'Google Sans', 'Roboto', sans-serif;
-  background-image: url('/UploadBackground.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
+.upload-page::-webkit-scrollbar {
+  display: none;
+}
 /* ── Navbar ── */
 .upload-nav {
   height: 125px;
