@@ -410,7 +410,11 @@ function OverviewTab({ data, horizon }) {
                   </span>
                   <div>
                     <p className="alert-name" style={{ color: isDown ? '#ef4444' : '#16a34a' }}>
-                      {a.product_name} · {a.alert_type}
+                      {a.product_name} · {
+                        !isDown && a.alert_type === 'Sales Anomaly' ? 'Demand Spike' :
+                        isDown && a.alert_type === 'Sales Anomaly' ? 'Demand Drop' :
+                        a.alert_type
+                      }
                     </p>
                     <p className="alert-metric">{plainEnglish}</p>
                   </div>
