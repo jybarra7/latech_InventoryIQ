@@ -590,3 +590,87 @@
   font-style: italic;
   line-height: 1.4;
 }
+
+/* ════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════ */
+
+.db-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #1e3a5f;
+  padding: 0.25rem;
+}
+
+.db-sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.4);
+  z-index: 99;
+}
+
+.db-sidebar-overlay.open {
+  display: block;
+}
+
+@media (max-width: 1024px) {
+
+  /* Show hamburger */
+  .db-hamburger {
+    display: block;
+  }
+
+  /* Sidebar slides in as overlay */
+  .db-sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 100vh;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .db-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* KPI grid — 2 columns */
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Bottom row stacks */
+  .bottom-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Two col stacks */
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+
+  /* KPI grid — 1 column */
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .db-header {
+    padding: 1rem;
+  }
+
+  .db-content {
+    padding: 1rem;
+  }
+
+  .db-header-title {
+    font-size: 1.1rem;
+  }
+}
