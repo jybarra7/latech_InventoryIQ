@@ -101,8 +101,10 @@ def validate_uploaded_data(raw_data: pd.DataFrame) -> dict:
 # -------------------------
 def normalize_column_name(column_name: str) -> str:
     """Andrew Garcia Leopold: make column names easier to compare."""
-    # Example: "Order_Date" and "order date" both become "order date".
-    column_name = str(column_name).strip().lower()
+    # Andrew: "OrderDate", "Order_Date", and "order date" all become easier to match.
+    column_name = str(column_name).strip()
+    column_name = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", column_name)
+    column_name = column_name.lower()
     column_name = re.sub(r"[_\-]+", " ", column_name)
     column_name = re.sub(r"[^a-z0-9 ]+", "", column_name)
     return re.sub(r"\s+", " ", column_name).strip()
@@ -144,12 +146,12 @@ def infer_column_mapping(df: pd.DataFrame) -> dict:
     for raw_column in df.columns:
         normalized_column = normalize_column_name(raw_column)
 
-        # First try a direct alias match, like "Order Date" -> "date".
+        # Andrew: first try a direct alias match, like "Order Date" -> "date".
         clean_columns = alias_lookup.get(normalized_column)
 
-        # Then try a fuzzy match for close names, like "sale amount" vs "sales amount".
+        # Andrew: then try a fuzzy match for close names, like "sale amnt" vs "sales amount".
         if clean_columns is None:
-            close_matches = get_close_matches(normalized_column, normalized_aliases, n=1, cutoff=0.88)
+            close_matches = get_close_matches(normalized_column, normalized_aliases, n=1, cutoff=0.82)
             if close_matches:
                 clean_columns = alias_lookup[close_matches[0]]
 
