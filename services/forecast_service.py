@@ -9,20 +9,58 @@ from __future__ import annotations
 import pandas as pd
 
 from utils.forecasting import (
+    FEATURE_REGRESSION_LAGS,
+    FEATURE_REGRESSION_ROLLING_WINDOWS,
+    LIGHTGBM_LAGS,
+    LIGHTGBM_ROLLING_WINDOWS,
+    SIMPLE_FUTURE_METHOD,
     add_mase_to_results,
     build_lightgbm_future_forecast,
+    build_simple_future_forecast,
     compare_models,
     prepare_forecast_input,
     run_feature_regression,
     run_lightgbm_global_lag,
     run_naive_baseline,
     run_rolling_average_baseline,
-    split_by_recent_dates,
 )
 
 
 DEFAULT_HORIZON_DAYS = 90
 DEFAULT_FUTURE_DAYS = 30
+
+
+def split_for_available_history(df: pd.DataFrame, horizon_days: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Andrew Garcia Leopold: hold out a smaller test window when uploads have limited history."""
+    unique_dates = pd.Series(pd.to_datetime(df["date"]).dropna().unique()).sort_values().tolist()
+    if len(unique_dates) < 2:
+        raise ValueError("Need at least two dates to run a forecast comparison.")
+
+    test_date_count = max(1, min(horizon_days, max(1, len(unique_dates) // 3)))
+    test_dates = set(unique_dates[-test_date_count:])
+    train_df = df[~df["date"].isin(test_dates)].copy()
+    test_df = df[df["date"].isin(test_dates)].copy()
+
+    if train_df.empty or test_df.empty:
+        raise ValueError("Not enough rows to create a train/test forecast split.")
+
+    return train_df, test_df
+
+
+def choose_lightgbm_features(train_df: pd.DataFrame, group_cols: list[str]) -> tuple[list[int], list[int]]:
+    """Andrew Garcia Leopold: use only lag features that the uploaded history can support."""
+    max_group_rows = int(train_df.groupby(group_cols).size().max())
+    lags = [lag for lag in LIGHTGBM_LAGS if lag < max_group_rows]
+    windows = [window for window in LIGHTGBM_ROLLING_WINDOWS if window <= max_group_rows]
+    return lags, windows
+
+
+def choose_regression_features(train_df: pd.DataFrame, group_cols: list[str]) -> tuple[list[int], list[int]]:
+    """Andrew Garcia Leopold: keep regression features small enough for short upload history."""
+    max_group_rows = int(train_df.groupby(group_cols).size().max())
+    lags = [lag for lag in FEATURE_REGRESSION_LAGS if lag < max_group_rows]
+    windows = [window for window in FEATURE_REGRESSION_ROLLING_WINDOWS if window <= max_group_rows]
+    return lags or [1], windows or [1]
 
 
 def run_forecast_pipeline(df: pd.DataFrame, horizon_days: int = DEFAULT_HORIZON_DAYS) -> dict:
@@ -39,18 +77,47 @@ def run_forecast_pipeline(df: pd.DataFrame, horizon_days: int = DEFAULT_HORIZON_
         dict with keys: comparison_table, winner, metrics
     """
     prepared = prepare_forecast_input(df)
-    train_df, test_df = split_by_recent_dates(prepared, horizon_days=horizon_days)
 
     group_cols = ["store", "item"]
     target_col = "sales"
     date_col = "date"
+    train_df, test_df = split_for_available_history(prepared, horizon_days=horizon_days)
 
     naive = run_naive_baseline(train_df, test_df, group_cols, target_col, date_col)
     rolling = run_rolling_average_baseline(train_df, test_df, group_cols, target_col, date_col)
-    regression = run_feature_regression(train_df, test_df, group_cols, target_col, date_col)
-    lightgbm = run_lightgbm_global_lag(train_df, test_df, group_cols, target_col, date_col)
+    results = [naive, rolling]
 
-    results = [naive, rolling, regression, lightgbm]
+    regression_lags, regression_windows = choose_regression_features(train_df, group_cols)
+    try:
+        regression = run_feature_regression(
+            train_df,
+            test_df,
+            group_cols,
+            target_col,
+            date_col,
+            lags=regression_lags,
+            rolling_windows=regression_windows,
+        )
+        results.append(regression)
+    except ValueError:
+        pass
+
+    lightgbm_lags, lightgbm_windows = choose_lightgbm_features(train_df, group_cols)
+    if lightgbm_lags and lightgbm_windows:
+        try:
+            lightgbm = run_lightgbm_global_lag(
+                train_df,
+                test_df,
+                group_cols,
+                target_col,
+                date_col,
+                lags=lightgbm_lags,
+                rolling_windows=lightgbm_windows,
+            )
+            results.append(lightgbm)
+        except ValueError:
+            pass
+
     add_mase_to_results(results, train_df, group_cols, target_col, date_col)
 
     comparison = compare_models(results)
@@ -79,10 +146,15 @@ def get_future_forecast(df: pd.DataFrame, future_days: int = DEFAULT_FUTURE_DAYS
     Returns:
         dict with keys: forecast_records, future_days, method
     """
-    forecast_df = build_lightgbm_future_forecast(df, future_days=future_days)
+    try:
+        forecast_df = build_lightgbm_future_forecast(df, future_days=future_days)
+        method = "lightgbm_global_lag"
+    except ValueError:
+        forecast_df = build_simple_future_forecast(df, future_days=future_days)
+        method = SIMPLE_FUTURE_METHOD
 
     return {
-        "method": "lightgbm_global_lag",
+        "method": method,
         "future_days": future_days,
         "forecast_records": forecast_df.to_dict(orient="records"),
     }
