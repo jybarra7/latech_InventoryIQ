@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(forecast_router)
-
+app.include_router(alert_router)
 
 @app.get("/")
 def root():

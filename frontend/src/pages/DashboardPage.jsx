@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import './DashboardPage.css'
 
@@ -22,17 +22,17 @@ const mockData = {
     total: 5
   },
   forecastChart: [
-    { month: 'Aug', value: 3200 },
-    { month: 'Sep', value: 2900 },
-    { month: 'Oct', value: 3100 },
-    { month: 'Nov', value: 2800 },
-    { month: 'Dec', value: 3400 },
-    { month: 'Jan', value: 3600 },
-    { month: 'Feb', value: 3500 },
-    { month: 'Mar', value: 3800 },
-    { month: 'Apr', value: 4100, projected: true },
-    { month: 'May', value: 4400, projected: true },
-    { month: 'Jun', value: 4700, projected: true },
+    { date: 'Aug', value: 3200 },
+    { date: 'Sep', value: 2900 },
+    { date: 'Oct', value: 3100 },
+    { date: 'Nov', value: 2800 },
+    { date: 'Dec', value: 3400 },
+    { date: 'Jan', value: 3600 },
+    { date: 'Feb', value: 3500 },
+    { date: 'Mar', value: 3800 },
+    { date: 'Apr', value: 4100 },
+    { date: 'May', value: 4400 },
+    { date: 'Jun', value: 4700 },
   ],
   topProducts: [
     { product: 'Item 15', total_sales: 1607442 },
@@ -58,103 +58,243 @@ function fmt(n) {
   return `$${n}`
 }
 
-const NAV_ITEMS = [
-  { id: 'overview', icon: '📊' },
-  { id: 'products', icon: '🏆' },
-  { id: 'analysis', icon: '📈' },
-]
+const HORIZONS = ['Next 30 days', 'Next 90 days', 'Next 6 months', 'Next 12 months']
 
 function DashboardPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('overview')
   const [horizon, setHorizon] = useState('Next 90 days')
-  const [selectedStore, setSelectedStore] = useState('All Stores')
-  const [selectedCategory, setSelectedCategory] = useState('All Categories')
-  const data = mockData
+  const [selectedStores, setSelectedStores] = useState([])
+  const [selectedCategories, setSelectedCategories] = useState([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const apiState = location.state
+  const kpis       = apiState?.kpiData    ?? mockData.kpis
+  const alertsData = apiState?.alertsData ?? mockData.alertsData
+  const fileName   = apiState?.fileName   ?? mockData.fileName
+
+  const forecastChart = apiState?.forecastData?.forecast_records
+    ? (() => {
+        const records = apiState.forecastData.forecast_records
+        const byMonth = {}
+        records.forEach(r => {
+          const month = r.date.slice(0, 7)
+          if (!byMonth[month]) byMonth[month] = { total: 0, count: 0, actual: 0, actualCount: 0 }
+          byMonth[month].total += r.prediction
+          byMonth[month].count += 1
+          if (r.actual) {
+            byMonth[month].actual += r.actual
+            byMonth[month].actualCount += 1
+          }
+        })
+        return Object.entries(byMonth)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-12)
+          .map(([month, data]) => ({
+            date: month,
+            value: Math.round(data.total / data.count),
+            actual: data.actualCount > 0 ? Math.round(data.actual / data.actualCount) : null,
+          }))
+      })()
+    : mockData.forecastChart
+
+  const data = {
+    ...mockData,
+    kpis,
+    alertsData,
+    fileName,
+    forecastChart,
+  }
+
+  function toggleStore(store) {
+    setSelectedStores(prev =>
+      prev.includes(store) ? prev.filter(s => s !== store) : [...prev, store]
+    )
+  }
+
+  function toggleCategory(cat) {
+    setSelectedCategories(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    )
+  }
+
+  function resetFilters() {
+    setHorizon('Next 90 days')
+    setSelectedStores([])
+    setSelectedCategories([])
+  }
+
+  const hasActiveFilters = selectedStores.length > 0 ||
+    selectedCategories.length > 0 ||
+    horizon !== 'Next 90 days'
 
   return (
     <div className="db">
 
-      {/* ── Icon rail sidebar ── */}
-      <aside className="db-rail">
-        <div className="db-rail-logo" onClick={() => navigate('/')}>
-          <span className="db-rail-logo-text">IQ</span>
+      {/* Overlay */}
+      <div
+        className={`db-sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* ── Sidebar ── */}
+      <aside className={`db-sidebar ${sidebarOpen ? 'open' : ''}`}>
+
+        <div className="db-sidebar-logo" onClick={() => navigate('/')}>
+          <img src="/logo.webp" alt="InventoryIQ" className="db-sidebar-logo-img" />
         </div>
-        <nav className="db-rail-nav">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              className={`db-rail-btn ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
-              title={item.id.charAt(0).toUpperCase() + item.id.slice(1)}
-            >
-              {item.icon}
+
+        <div className="db-sidebar-section">
+          <p className="db-sidebar-label">Menu</p>
+          <nav className="db-nav">
+            {[
+              { id: 'overview', icon: '📊', label: 'Overview'  },
+              { id: 'products', icon: '🏆', label: 'Products'  },
+              { id: 'analysis', icon: '📈', label: 'Analysis'  },
+            ].map(item => (
+              <button
+                key={item.id}
+                className={`db-nav-btn ${activeTab === item.id ? 'active' : ''}`}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+              >
+                <span className="db-nav-icon">{item.icon}</span>
+                <span>{item.label}</span>
+                {activeTab === item.id && <span className="db-nav-pip" />}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="db-sidebar-section">
+          <p className="db-sidebar-label">Forecast Horizon</p>
+          <div className="db-radio-group">
+            {HORIZONS.map(h => (
+              <label key={h} className="db-radio-item">
+                <input
+                  type="radio"
+                  name="horizon"
+                  value={h}
+                  checked={horizon === h}
+                  onChange={() => setHorizon(h)}
+                />
+                <span>{h}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="db-sidebar-section">
+          <p className="db-sidebar-label">
+            Stores
+            {selectedStores.length > 0 &&
+              <span className="db-filter-count">{selectedStores.length}</span>
+            }
+          </p>
+          <div className="db-checkbox-group">
+            {data.stores.map(store => (
+              <label key={store} className="db-checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={selectedStores.includes(store)}
+                  onChange={() => toggleStore(store)}
+                />
+                <span>{store}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="db-sidebar-section">
+          <p className="db-sidebar-label">
+            Categories
+            {selectedCategories.length > 0 &&
+              <span className="db-filter-count">{selectedCategories.length}</span>
+            }
+          </p>
+          <div className="db-checkbox-group">
+            {data.categories.map(cat => (
+              <label key={cat} className="db-checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={selectedCategories.includes(cat)}
+                  onChange={() => toggleCategory(cat)}
+                />
+                <span>{cat}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="db-sidebar-bottom">
+          {hasActiveFilters && (
+            <button className="db-reset-btn" onClick={resetFilters}>
+              ↺ Reset Filters
             </button>
-          ))}
-        </nav>
-        <div className="db-rail-bottom">
-          <button className="db-rail-btn" onClick={() => navigate('/upload')} title="Upload New File">⬆</button>
-          <button className="db-rail-btn" title="Settings">⚙</button>
+          )}
+          <div className="db-file-chip">
+            <span>📄</span>
+            <span className="db-file-name">{fileName}</span>
+          </div>
+          <button className="db-new-file" onClick={() => navigate('/upload')}>
+            + Upload New File
+          </button>
         </div>
+
       </aside>
 
       {/* ── Main ── */}
       <div className="db-main">
-
-        {/* Header */}
         <header className="db-header">
-          <div className="db-header-left">
-            <h1 className="db-header-title">
-              {activeTab === 'overview' && 'Dashboard Overview'}
-              {activeTab === 'products' && 'Products'}
-              {activeTab === 'analysis' && 'Analysis'}
-            </h1>
-            <p className="db-header-sub">
-              {activeTab === 'overview' && 'Your retail performance at a glance'}
-              {activeTab === 'products' && 'Top and bottom performing products'}
-              {activeTab === 'analysis' && 'Category trends and store performance'}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button className="db-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              ☰
+            </button>
+            <div className="db-header-left">
+              <h1 className="db-header-title">
+                {activeTab === 'overview' && 'Dashboard Overview'}
+                {activeTab === 'products' && 'Products'}
+                {activeTab === 'analysis' && 'Analysis'}
+              </h1>
+              <p className="db-header-sub">
+                {activeTab === 'overview' && 'Your retail performance at a glance'}
+                {activeTab === 'products' && 'Top and bottom performing products'}
+                {activeTab === 'analysis' && 'Category trends and store performance'}
+              </p>
+            </div>
           </div>
-          <div className="db-header-right">
-            <select className="db-filter-pill" value={selectedStore} onChange={e => setSelectedStore(e.target.value)}>
-              <option>All Stores</option>
-              {data.stores.map(s => <option key={s}>{s}</option>)}
-            </select>
-            <select className="db-filter-pill" value={horizon} onChange={e => setHorizon(e.target.value)}>
-              <option>Next 90 days</option>
-              <option>Next 30 days</option>
-              <option>Next 6 months</option>
-            </select>
-            <select className="db-filter-pill" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
-              <option>All Categories</option>
-              {data.categories.map(c => <option key={c}>{c}</option>)}
-            </select>
-            <button className="db-ai-btn">✦ AI Summary</button>
-          </div>
+          <button className="db-ai-btn">✦ AI Summary</button>
         </header>
 
-        {/* Content */}
         <div className="db-content">
-          {activeTab === 'overview' && <OverviewTab data={data} />}
+          {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} />}
           {activeTab === 'products' && <ProductsTab data={data} />}
           {activeTab === 'analysis' && <AnalysisTab />}
         </div>
-
       </div>
+
     </div>
   )
 }
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
-function OverviewTab({ data }) {
+function OverviewTab({ data, horizon }) {
   const { kpis, alertsData, forecastChart } = data
-  const alerts = alertsData.alerts
-  const bad = alerts.filter(a => a.metric.includes('below'))
+  const alerts = alertsData?.alerts ?? []
+  const bad = alerts.filter(a => a.severity >= 1.5)
+
+  const projectedRevenue = () => {
+    const base = kpis.total_sales
+    if (horizon === 'Next 30 days')   return fmt(base * 0.085)
+    if (horizon === 'Next 90 days')   return fmt(base * 0.24)
+    if (horizon === 'Next 6 months')  return fmt(base * 0.48)
+    if (horizon === 'Next 12 months') return fmt(base * 0.95)
+    return fmt(base * 0.24)
+  }
 
   return (
     <div className="tab">
 
-      {/* AI Insight */}
       <div className="ai-insight">
         <span className="ai-insight-icon">✦</span>
         <span className="ai-insight-label">AI INSIGHT</span>
@@ -164,83 +304,121 @@ function OverviewTab({ data }) {
         <button className="ai-insight-btn">Full Summary</button>
       </div>
 
-      {/* KPI Grid */}
       <div className="kpi-grid">
+
         <div className="kpi-hero">
           <div className="kpi-hero-bg" />
           <p className="kpi-hero-label">Total Revenue</p>
           <p className="kpi-hero-value">{fmt(kpis.total_sales)}</p>
-          <div className="kpi-hero-badge" style={{textTransform:'capitalize'}}>▲ {kpis.forecast_direction}</div>
         </div>
+
         <div className="kpi-card">
           <p className="kpi-label">Sales Trend</p>
           <p className="kpi-value" style={{textTransform:'capitalize'}}>{kpis.forecast_direction}</p>
-          <p className="kpi-delta kpi-up">▲ Trending up</p>
         </div>
-        <div className="kpi-card">
+
+        <div className="kpi-card" style={{
+          background: (alertsData?.total ?? 0) === 0
+            ? 'linear-gradient(135deg, #14532d 0%, #16a34a 100%)'
+            : 'linear-gradient(135deg, #7f1d1d 0%, #ef4444 100%)',
+          boxShadow: (alertsData?.total ?? 0) === 0
+            ? '0 4px 16px rgba(22,163,74,0.4)'
+            : '0 4px 16px rgba(239,68,68,0.4)'
+        }}>
           <p className="kpi-label">Active Alerts</p>
-          <p className="kpi-value">{alertsData.total}</p>
-          <p className="kpi-delta kpi-down">{bad.length} need attention</p>
+          <p className="kpi-value">{alertsData?.total ?? 0}</p>
+          <p className="kpi-delta" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            {(alertsData?.total ?? 0) === 0 ? '✅ All clear' : `⚠ ${bad.length} need attention`}
+          </p>
         </div>
+
         <div className="kpi-card">
-          <p className="kpi-label">Model Accuracy</p>
-          <p className="kpi-value">MAE {kpis.mae}</p>
-          <p className="kpi-delta kpi-neutral">Best model</p>
+          <p className="kpi-label">Projected Revenue</p>
+          <p className="kpi-value">{projectedRevenue()}</p>
+          <p className="kpi-delta kpi-neutral">→ {horizon}</p>
         </div>
+
       </div>
 
-      {/* Bottom row */}
       <div className="bottom-row">
 
-        {/* Forecast chart */}
         <div className="panel">
           <p className="panel-title">Sales Forecast</p>
           <p className="panel-sub">Historical performance vs projected growth</p>
+          <div className="chart-legend">
+            <span><span className="chart-dot chart-dot-navy" />Actual Sales</span>
+            <span><span className="chart-dot chart-dot-blue" />Forecast</span>
+          </div>
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}`} />
+              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 60, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: '#8aaac8' }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={Math.floor(forecastChart.length / 8)}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#8aaac8' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={v => `${v.toLocaleString()}`}
+                  width={80}
+                />
                 <Tooltip
                   contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: '#1e3a5f', fontWeight: 600 }}
+                  formatter={(value, name) => [
+                    `${value.toLocaleString()} units`,
+                    name === 'value' ? '📈 Forecast' : '📊 Actual'
+                  ]}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#64B5F6"
-                  strokeWidth={2.5}
-                  dot={(props) => {
-                    const { cx, cy, payload } = props
-                    if (payload.projected) return null
-                    return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill="#64B5F6" strokeWidth={0} />
-                  }}
-                  activeDot={{ r: 6, fill: '#1e3a5f' }}
-                />
+                <Line type="monotone" dataKey="actual" stroke="#1e3a5f" strokeWidth={2} dot={false} name="actual" />
+                <Line type="monotone" dataKey="value" stroke="#2196f3" strokeWidth={2.5} dot={false} name="value" strokeDasharray="5 5" activeDot={{ r: 5, fill: '#2196f3' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Alert list */}
         <div className="panel">
           <div className="panel-header-row">
             <div>
               <p className="panel-title">Alert Center</p>
-              <p className="panel-sub">{alertsData.total} active alerts</p>
+              <p className="panel-sub">{alertsData?.total ?? 0} active alerts</p>
             </div>
-            <span className="badge-red">{alertsData.total} Active</span>
+            <span className="badge-red">{alertsData?.total ?? 0} Active</span>
           </div>
           <div className="alert-list">
-            {alerts.map((a, i) => {
-              const isUp = a.metric.includes('above')
-              const severityColor = a.severity >= 2 ? '#ef4444' : '#f59e0b'
+            {alerts.length === 0 ? (
+              <p style={{color:'#8aaac8', fontSize:'0.82rem', padding:'1rem 0'}}>No alerts detected</p>
+            ) : alerts.map((a, i) => {
+              const isDown = a.metric?.includes('below')
+              const cardColor = isDown ? '#fef2f2' : '#f0fdf4'
+              const borderColor = isDown ? '#ef4444' : '#22c55e'
+              const plainEnglish = isDown
+                ? `⚠️ Sales have unexpectedly dropped — this item may need attention`
+                : `✅ Sales have unexpectedly spiked — this item is performing above normal`
               return (
-                <div key={i} className="alert-row" style={{ borderLeftColor: severityColor }}>
+                <div key={i} className="alert-row" style={{
+                  borderLeftColor: borderColor,
+                  backgroundColor: cardColor,
+                  borderRadius: '8px',
+                  marginBottom: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '2px' }}>
+                    {isDown ? '📉' : '📈'}
+                  </span>
                   <div>
-                    <p className="alert-name">{a.product_name} · {a.alert_type}</p>
-                    <p className="alert-detail">Severity {a.severity}</p>
+                    <p className="alert-name" style={{ color: isDown ? '#ef4444' : '#16a34a' }}>
+                      {a.product_name} · {
+                        !isDown && a.alert_type === 'Sales Anomaly' ? 'Demand Spike' :
+                        isDown && a.alert_type === 'Sales Anomaly' ? 'Demand Drop' :
+                        a.alert_type
+                      }
+                    </p>
+                    <p className="alert-metric">{plainEnglish}</p>
                   </div>
                 </div>
               )
@@ -310,7 +488,7 @@ function ProductsTab({ data }) {
   )
 }
 
-// ── ANALYSIS ──────────────────────────────────────────────────────────────────
+// ── ANALYSIS ──────────────────────────────────────────════════════════════════
 function AnalysisTab() {
   return (
     <div className="tab">

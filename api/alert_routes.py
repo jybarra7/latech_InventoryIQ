@@ -29,6 +29,10 @@ async def run_alerts(
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        df = df.rename(columns={
+            "store": "store_id",
+            "item": "product_id",
+        })
     except Exception:
         raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
 

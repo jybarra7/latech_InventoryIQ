@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
-import { runForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
+import { runForecast, getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
 
 function UploadPage() {
@@ -50,7 +50,6 @@ function UploadPage() {
 
   async function handleContinue() {
     if (!uploadedFile || loading) return
-
     setLoading(true)
     setError(null)
 
@@ -59,13 +58,23 @@ function UploadPage() {
       await runForecast(uploadedFile, 90)
 
       setLoadingStep('Calculating KPIs...')
-      await getForecastKpis(uploadedFile, 30)
+      const kpiResult = await getForecastKpis(uploadedFile, 30)
+
+      setLoadingStep('Generating forecast chart...')
+      const forecastResult = await getFutureForecast(uploadedFile, 365)
 
       setLoadingStep('Scanning for alerts...')
-      await runAlerts(uploadedFile)
+      const alertsResult = await runAlerts(uploadedFile)
 
       setLoadingStep('Almost there...')
-      navigate('/dashboard')
+      navigate('/dashboard', {
+        state: {
+          kpiData: kpiResult,
+          forecastData: forecastResult,
+          alertsData: alertsResult,
+          fileName: uploadedFile.name,
+        }
+      })
 
     } catch (err) {
       setError(parseApiError(err))
@@ -93,20 +102,22 @@ function UploadPage() {
         <div className="upload-card">
 
           {loading ? (
-
-            /* ── Loading state ── */
             <div className="upload-loading">
               <div className="upload-spinner" />
               <p className="upload-loading-title">Analyzing your data</p>
               <p className="upload-loading-step">{loadingStep}</p>
               <div className="upload-loading-steps">
-                <div className={`upload-step-item ${loadingStep.includes('forecast') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('forecast model') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Running forecast model</span>
                 </div>
-                <div className={`upload-step-item ${loadingStep.includes('KPI') ? 'active' : ''} ${loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('KPI') ? 'active' : ''} ${loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Calculating KPIs</span>
+                </div>
+                <div className={`upload-step-item ${loadingStep.includes('chart') ? 'active' : ''} ${loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Generating forecast chart</span>
                 </div>
                 <div className={`upload-step-item ${loadingStep.includes('alert') ? 'active' : ''} ${loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
@@ -120,15 +131,12 @@ function UploadPage() {
             </div>
 
           ) : (
-
-            /* ── Upload state ── */
             <>
               <div className="upload-header">
                 <h1>Upload Your Data</h1>
                 <p>Drop your retail CSV or Excel file.<br />We handle the rest.</p>
               </div>
 
-              {/* Drop zone */}
               <div
                 className={`upload-dropzone ${isDragging ? 'dragging' : ''} ${uploadedFile ? 'success' : ''}`}
                 onDragOver={handleDragOver}
@@ -164,7 +172,6 @@ function UploadPage() {
                 )}
               </div>
 
-              {/* Error */}
               {error && (
                 <div className="upload-error">
                   ⚠️ {error}
@@ -174,7 +181,6 @@ function UploadPage() {
                 </div>
               )}
 
-              {/* Button */}
               <button
                 className={`upload-btn ${uploadedFile ? 'active' : 'disabled'}`}
                 onClick={handleContinue}
@@ -183,19 +189,16 @@ function UploadPage() {
                 {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
               </button>
 
-              {/* Reassurance */}
               <div className="upload-reassurance">
                 <span>✓ Auto column detection</span>
                 <span>✓ No formatting needed</span>
                 <span>✓ CSV & Excel supported</span>
               </div>
             </>
-
           )}
 
         </div>
       </div>
-
     </div>
   )
 }
