@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from services.forecast_service import get_future_forecast, run_forecast_pipeline, shape_fast_kpi_payload
+from services.forecast_service import get_future_forecast, run_forecast_pipeline
 
 
 def small_forecast_dataset() -> pd.DataFrame:
@@ -36,17 +36,7 @@ def test_get_future_forecast_uses_simple_fallback_for_small_dataset() -> None:
     assert result["forecast_records"][0]["prediction"] == 15
 
 
-def test_shape_fast_kpi_payload_does_not_require_model_training() -> None:
-    result = shape_fast_kpi_payload(small_forecast_dataset())
-
-    assert result["total_sales"] == 75
-    assert result["forecast_direction"] == "increasing"
-    assert result["winner_model"] == "fast_upload_summary"
-    assert result["mae"] is None
-
-
 if __name__ == "__main__":
     test_run_forecast_pipeline_handles_small_dataset_without_lightgbm_crash()
     test_get_future_forecast_uses_simple_fallback_for_small_dataset()
-    test_shape_fast_kpi_payload_does_not_require_model_training()
     print("Small dataset forecasting tests passed.")

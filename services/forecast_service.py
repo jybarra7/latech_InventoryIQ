@@ -194,30 +194,3 @@ def shape_kpi_payload(df: pd.DataFrame, forecast_result: dict) -> dict:
         "winner_model": forecast_result.get("winner", "unknown"),
         "mae": forecast_result.get("metrics", {}).get("mae"),
     }
-
-
-def shape_fast_kpi_payload(df: pd.DataFrame) -> dict:
-    """Andrew Garcia Leopold: build KPI cards without training a forecast model first."""
-    prepared = prepare_forecast_input(df)
-    total_sales = round(float(prepared["sales"].sum()), 2)
-
-    daily_sales = prepared.groupby("date")["sales"].sum().sort_index()
-    if len(daily_sales) >= 2:
-        midpoint = max(1, len(daily_sales) // 2)
-        earlier = float(daily_sales.iloc[:midpoint].mean())
-        recent = float(daily_sales.iloc[midpoint:].mean())
-        if recent > earlier * 1.02:
-            direction = "increasing"
-        elif recent < earlier * 0.98:
-            direction = "declining"
-        else:
-            direction = "flat"
-    else:
-        direction = "flat"
-
-    return {
-        "total_sales": total_sales,
-        "forecast_direction": direction,
-        "winner_model": "fast_upload_summary",
-        "mae": None,
-    }

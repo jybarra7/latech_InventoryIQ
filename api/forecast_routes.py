@@ -10,7 +10,7 @@ import io
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
-from services.forecast_service import get_future_forecast, run_forecast_pipeline, shape_fast_kpi_payload
+from services.forecast_service import get_future_forecast, run_forecast_pipeline, shape_kpi_payload
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
@@ -68,7 +68,8 @@ async def forecast_kpis(file: UploadFile = File(...), future_days: int = 30):
         raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
 
     try:
-        kpis = shape_fast_kpi_payload(df)
+        forecast_result = get_future_forecast(df, future_days=future_days)
+        kpis = shape_kpi_payload(df, forecast_result)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
-import { getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
+import { runForecast, getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
 
 function UploadPage() {
@@ -54,12 +54,17 @@ function UploadPage() {
     setError(null)
 
     try {
-      setLoadingStep('Preparing dashboard data...')
-      const [kpiResult, forecastResult, alertsResult] = await Promise.all([
-        getForecastKpis(uploadedFile, 30),
-        getFutureForecast(uploadedFile, 90),
-        runAlerts(uploadedFile),
-      ])
+      setLoadingStep('Running forecast model...')
+      await runForecast(uploadedFile, 90)
+
+      setLoadingStep('Calculating KPIs...')
+      const kpiResult = await getForecastKpis(uploadedFile, 30)
+
+      setLoadingStep('Generating forecast chart...')
+      const forecastResult = await getFutureForecast(uploadedFile, 365)
+
+      setLoadingStep('Scanning for alerts...')
+      const alertsResult = await runAlerts(uploadedFile)
 
       setLoadingStep('Almost there...')
       navigate('/dashboard', {
@@ -102,19 +107,19 @@ function UploadPage() {
               <p className="upload-loading-title">Analyzing your data</p>
               <p className="upload-loading-step">{loadingStep}</p>
               <div className="upload-loading-steps">
-                <div className={`upload-step-item ${loadingStep.includes('dashboard data') ? 'active' : ''} ${loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('forecast model') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
-                  <span>Loading dashboard data</span>
+                  <span>Running forecast model</span>
                 </div>
-                <div className={`upload-step-item ${loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('KPI') ? 'active' : ''} ${loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Calculating KPIs</span>
                 </div>
-                <div className={`upload-step-item ${loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('chart') ? 'active' : ''} ${loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Generating forecast chart</span>
                 </div>
-                <div className={`upload-step-item ${loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('alert') ? 'active' : ''} ${loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Scanning for alerts</span>
                 </div>
