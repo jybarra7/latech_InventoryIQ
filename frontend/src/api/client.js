@@ -41,11 +41,11 @@ export const runForecast = async (file, horizonDays = 90) => {
   return response.data;
 };
 
-export const getFutureForecast = async (file, futureDays = 30) => {
+export const getFutureForecast = async (file, futureDays = 30, { fast = false } = {}) => {
   const formData = buildFileFormData(file);
 
   const response = await api.post('/forecast/future', formData, {
-    params: { future_days: futureDays },
+    params: { future_days: futureDays, fast },
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 

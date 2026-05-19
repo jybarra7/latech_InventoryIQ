@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.processor import generate_filter_options
+from utils.processor import FILTER_OPTION_KEYS, generate_filter_options, validate_filter_options_shape
 
 
 def test_generate_filter_options_returns_sorted_values_and_date_range() -> None:
@@ -25,6 +25,8 @@ def test_generate_filter_options_returns_sorted_values_and_date_range() -> None:
     assert options["regions"] == ["North", "South"]
     assert options["start_date"] == pd.Timestamp("2024-01-01")
     assert options["end_date"] == pd.Timestamp("2024-03-01")
+    assert list(options.keys()) == FILTER_OPTION_KEYS
+    assert validate_filter_options_shape(options) is True
 
 
 def test_generate_filter_options_handles_missing_region_column() -> None:
@@ -39,6 +41,7 @@ def test_generate_filter_options_handles_missing_region_column() -> None:
     assert options["regions"] == []
     assert options["start_date"] == pd.Timestamp("2024-01-01")
     assert options["end_date"] == pd.Timestamp("2024-01-01")
+    assert validate_filter_options_shape(options) is True
 
 
 def test_generate_filter_options_ignores_blank_filter_values() -> None:
@@ -56,10 +59,48 @@ def test_generate_filter_options_ignores_blank_filter_values() -> None:
     assert options["regions"] == ["South"]
     assert options["start_date"] == pd.Timestamp("2024-01-01")
     assert options["end_date"] == pd.Timestamp("2024-01-01")
+    assert validate_filter_options_shape(options) is True
+
+
+def test_validate_filter_options_shape_rejects_missing_keys() -> None:
+    bad_options = {
+        "stores": [1],
+        "categories": ["Shirts"],
+        "regions": [],
+        "start_date": pd.Timestamp("2024-01-01"),
+    }
+
+    try:
+        validate_filter_options_shape(bad_options)
+    except ValueError as error:
+        assert "exactly these keys" in str(error)
+        return
+
+    raise AssertionError("Expected missing filter key to raise ValueError.")
+
+
+def test_validate_filter_options_shape_rejects_wrong_value_types() -> None:
+    bad_options = {
+        "stores": "1",
+        "categories": ["Shirts"],
+        "regions": [],
+        "start_date": pd.Timestamp("2024-01-01"),
+        "end_date": pd.Timestamp("2024-01-01"),
+    }
+
+    try:
+        validate_filter_options_shape(bad_options)
+    except ValueError as error:
+        assert "'stores' must be a list" in str(error)
+        return
+
+    raise AssertionError("Expected wrong filter value type to raise ValueError.")
 
 
 if __name__ == "__main__":
     test_generate_filter_options_returns_sorted_values_and_date_range()
     test_generate_filter_options_handles_missing_region_column()
     test_generate_filter_options_ignores_blank_filter_values()
+    test_validate_filter_options_shape_rejects_missing_keys()
+    test_validate_filter_options_shape_rejects_wrong_value_types()
     print("Filter option tests passed.")

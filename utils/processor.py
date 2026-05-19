@@ -5,6 +5,9 @@ import re
 from utils.schema import COLUMN_ALIASES, OPTIONAL_COLUMNS, SCHEMA
 
 
+FILTER_OPTION_KEYS = ["stores", "categories", "regions", "start_date", "end_date"]
+
+
 # -------------------------
 # APP COMPATIBILITY WRAPPER
 # -------------------------
@@ -98,8 +101,10 @@ def validate_uploaded_data(raw_data: pd.DataFrame) -> dict:
 # -------------------------
 def normalize_column_name(column_name: str) -> str:
     """Andrew Garcia Leopold: make column names easier to compare."""
-    # Example: "Order_Date" and "order date" both become "order date".
-    column_name = str(column_name).strip().lower()
+    # Andrew: "OrderDate", "Order_Date", and "order date" all become easier to match.
+    column_name = str(column_name).strip()
+    column_name = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", column_name)
+    column_name = column_name.lower()
     column_name = re.sub(r"[_\-]+", " ", column_name)
     column_name = re.sub(r"[^a-z0-9 ]+", "", column_name)
     return re.sub(r"\s+", " ", column_name).strip()
@@ -141,12 +146,12 @@ def infer_column_mapping(df: pd.DataFrame) -> dict:
     for raw_column in df.columns:
         normalized_column = normalize_column_name(raw_column)
 
-        # First try a direct alias match, like "Order Date" -> "date".
+        # Andrew: first try a direct alias match, like "Order Date" -> "date".
         clean_columns = alias_lookup.get(normalized_column)
 
-        # Then try a fuzzy match for close names, like "sale amount" vs "sales amount".
+        # Andrew: then try a fuzzy match for close names, like "sale amnt" vs "sales amount".
         if clean_columns is None:
-            close_matches = get_close_matches(normalized_column, normalized_aliases, n=1, cutoff=0.88)
+            close_matches = get_close_matches(normalized_column, normalized_aliases, n=1, cutoff=0.82)
             if close_matches:
                 clean_columns = alias_lookup[close_matches[0]]
 
@@ -269,7 +274,16 @@ def get_sorted_filter_values(df: pd.DataFrame, column_name: str) -> list:
 
 
 def generate_filter_options(df: pd.DataFrame) -> dict:
-    """Andrew Garcia Leopold: build store, region, category, and date filter options."""
+    """
+    Andrew Garcia Leopold: build the standard dashboard filter option contract.
+
+    Return shape:
+        stores: list of store IDs for the Store filter
+        categories: list of category names for the Category filter
+        regions: list of region names, or [] when region data is missing
+        start_date: earliest valid date in the cleaned data, or None
+        end_date: latest valid date in the cleaned data, or None
+    """
     date_values = pd.to_datetime(df["date"], errors="coerce").dropna()
 
     return {
@@ -278,6 +292,43 @@ def generate_filter_options(df: pd.DataFrame) -> dict:
         "regions": get_sorted_filter_values(df, "region"),
         "start_date": date_values.min() if not date_values.empty else None,
         "end_date": date_values.max() if not date_values.empty else None,
+    }
+
+
+def validate_filter_options_shape(filter_options: dict) -> bool:
+    """Andrew Garcia Leopold: confirm filter options match the expected backend contract."""
+    missing_keys = [key for key in FILTER_OPTION_KEYS if key not in filter_options]
+    extra_keys = [key for key in filter_options if key not in FILTER_OPTION_KEYS]
+
+    if missing_keys or extra_keys:
+        raise ValueError(
+            "Filter options must use exactly these keys: "
+            + ", ".join(FILTER_OPTION_KEYS)
+        )
+
+    for list_key in ["stores", "categories", "regions"]:
+        if not isinstance(filter_options[list_key], list):
+            raise ValueError(f"Filter option '{list_key}' must be a list.")
+
+    for date_key in ["start_date", "end_date"]:
+        date_value = filter_options[date_key]
+        if date_value is not None and not isinstance(date_value, pd.Timestamp):
+            raise ValueError(f"Filter option '{date_key}' must be a pandas Timestamp or None.")
+
+    return True
+
+
+def prepare_retail_data(raw_data: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: run the full backend prep flow for uploaded retail data."""
+    clean_df = load_and_clean_data(raw_data)
+    filters = generate_filter_options(clean_df)
+    validate_filter_options_shape(filters)
+
+    return {
+        "data": clean_df,
+        "filters": filters,
+        "column_mapping": clean_df.attrs.get("column_mapping", {}),
+        "optional_fields": clean_df.attrs.get("optional_fields", {}),
     }
 
 
