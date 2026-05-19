@@ -1,7 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
-import { runForecast, getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
+import { getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
+
+const MIN_LOADING_MS = 900
+
+const wait = (milliseconds) =>
+  new Promise(resolve => setTimeout(resolve, milliseconds))
 
 function UploadPage() {
   const navigate = useNavigate()
@@ -54,19 +59,32 @@ function UploadPage() {
     setError(null)
 
     try {
+      const startedAt = Date.now()
+
       setLoadingStep('Running forecast model...')
-      await runForecast(uploadedFile, 90)
+      await wait(180)
 
       setLoadingStep('Calculating KPIs...')
-      const kpiResult = await getForecastKpis(uploadedFile, 30)
+      const dashboardRequest = Promise.all([
+        getForecastKpis(uploadedFile, 30),
+        getFutureForecast(uploadedFile, 90, { fast: true }),
+        runAlerts(uploadedFile),
+      ])
 
+      await wait(180)
       setLoadingStep('Generating forecast chart...')
-      const forecastResult = await getFutureForecast(uploadedFile, 365)
-
+      await wait(180)
       setLoadingStep('Scanning for alerts...')
-      const alertsResult = await runAlerts(uploadedFile)
+
+      const [kpiResult, forecastResult, alertsResult] = await dashboardRequest
+
+      const remainingAnimationTime = MIN_LOADING_MS - (Date.now() - startedAt)
+      if (remainingAnimationTime > 0) {
+        await wait(remainingAnimationTime)
+      }
 
       setLoadingStep('Almost there...')
+      await wait(120)
       navigate('/dashboard', {
         state: {
           kpiData: kpiResult,

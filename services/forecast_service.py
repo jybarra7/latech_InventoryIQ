@@ -134,7 +134,7 @@ def run_forecast_pipeline(df: pd.DataFrame, horizon_days: int = DEFAULT_HORIZON_
     }
 
 
-def get_future_forecast(df: pd.DataFrame, future_days: int = DEFAULT_FUTURE_DAYS) -> dict:
+def get_future_forecast(df: pd.DataFrame, future_days: int = DEFAULT_FUTURE_DAYS, fast: bool = False) -> dict:
     """
     Generates a forward-looking forecast using LightGBM trained
     on all available data. Used for the dashboard forecast chart.
@@ -146,6 +146,14 @@ def get_future_forecast(df: pd.DataFrame, future_days: int = DEFAULT_FUTURE_DAYS
     Returns:
         dict with keys: forecast_records, future_days, method
     """
+    if fast:
+        forecast_df = build_simple_future_forecast(df, future_days=future_days)
+        return {
+            "method": SIMPLE_FUTURE_METHOD,
+            "future_days": future_days,
+            "forecast_records": forecast_df.to_dict(orient="records"),
+        }
+
     try:
         forecast_df = build_lightgbm_future_forecast(df, future_days=future_days)
         method = "lightgbm_global_lag"
@@ -193,4 +201,31 @@ def shape_kpi_payload(df: pd.DataFrame, forecast_result: dict) -> dict:
         "forecast_direction": direction,
         "winner_model": forecast_result.get("winner", "unknown"),
         "mae": forecast_result.get("metrics", {}).get("mae"),
+    }
+
+
+def shape_fast_kpi_payload(df: pd.DataFrame) -> dict:
+    """Andrew Garcia Leopold: build KPI cards without training a forecast model first."""
+    prepared = prepare_forecast_input(df)
+    total_sales = round(float(prepared["sales"].sum()), 2)
+
+    daily_sales = prepared.groupby("date")["sales"].sum().sort_index()
+    if len(daily_sales) >= 2:
+        midpoint = max(1, len(daily_sales) // 2)
+        earlier_average = float(daily_sales.iloc[:midpoint].mean())
+        recent_average = float(daily_sales.iloc[midpoint:].mean())
+        if recent_average > earlier_average * 1.02:
+            direction = "increasing"
+        elif recent_average < earlier_average * 0.98:
+            direction = "declining"
+        else:
+            direction = "flat"
+    else:
+        direction = "flat"
+
+    return {
+        "total_sales": total_sales,
+        "forecast_direction": direction,
+        "winner_model": "fast_upload_summary",
+        "mae": None,
     }
