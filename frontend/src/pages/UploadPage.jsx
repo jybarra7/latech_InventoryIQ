@@ -1,12 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
-import { getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
+import { runForecast, getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
-
-const MIN_LOADING_MS = 900
-
-const wait = (milliseconds) =>
-  new Promise(resolve => setTimeout(resolve, milliseconds))
 
 function UploadPage() {
   const navigate = useNavigate()
@@ -53,44 +48,125 @@ function UploadPage() {
     handleFile(e.target.files[0])
   }
 
+  function parseCSV(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const text = e.target.result
+          const lines = text.trim().split('\n')
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''))
+
+          const rows = lines.slice(1).map(line => {
+            const values = line.split(',')
+            const row = {}
+            headers.forEach((h, i) => {
+              row[h] = values[i]?.trim().replace(/['"]/g, '')
+            })
+            return row
+          })
+
+          // Find column names flexibly
+          const ITEM_PRIORITY = ['product_name', 'name', 'item_name', 'description', 'product', 'item', 'sku', 'product_id']
+          const itemCol = ITEM_PRIORITY.find(p => headers.includes(p)) || 'item'
+
+          const STORE_PRIORITY = ['store_name', 'store', 'store_id', 'store_number', 'branch']
+          const storeCol = STORE_PRIORITY.find(p => headers.includes(p)) || 'store'
+
+          const CATEGORY_PRIORITY = ['category', 'department', 'type', 'segment']
+          const categoryCol = CATEGORY_PRIORITY.find(p => headers.includes(p)) || null
+
+          const DATE_PRIORITY = ['date', 'order_date', 'transaction_date', 'invoice_date']
+          const dateCol = DATE_PRIORITY.find(p => headers.includes(p)) || 'date'
+
+          const SALES_PRIORITY = ['sales', 'revenue', 'amount', 'total', 'price']
+          const salesCol = SALES_PRIORITY.find(p => headers.includes(p)) || 'sales'
+
+          // Aggregate sales by product
+          const productSales = {}
+          const storeSales = {}
+          const categorySales = {}
+          const monthlyTotal = {}
+
+          rows.forEach(row => {
+            const sales = parseFloat(row[salesCol]) || 0
+            const item = row[itemCol] || 'Unknown'
+            const store = row[storeCol] || 'Unknown'
+            const category = categoryCol ? (row[categoryCol] || 'Unknown') : null
+            const date = row[dateCol] ? row[dateCol].slice(0, 7) : null
+
+            productSales[item] = (productSales[item] || 0) + sales
+            storeSales[store] = (storeSales[store] || 0) + sales
+            if (category) categorySales[category] = (categorySales[category] || 0) + sales
+            if (date) monthlyTotal[date] = (monthlyTotal[date] || 0) + sales
+          })
+
+          const sortedProducts = Object.entries(productSales)
+            .sort((a, b) => b[1] - a[1])
+            .map(([product, total_sales]) => ({ product, total_sales }))
+
+          const sortedStores = Object.entries(storeSales)
+            .sort((a, b) => b[1] - a[1])
+            .map(([store, total_sales]) => ({ store, total_sales }))
+
+          const sortedCategories = Object.entries(categorySales)
+            .sort((a, b) => b[1] - a[1])
+            .map(([category, total_sales]) => ({ category, total_sales }))
+
+          const monthlyChart = Object.entries(monthlyTotal)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, total_sales]) => ({ date, total_sales }))
+
+          const uniqueStores = [...new Set(rows.map(r => r[storeCol]).filter(Boolean))].sort()
+          const uniqueCategories = categoryCol
+            ? [...new Set(rows.map(r => r[categoryCol]).filter(Boolean))].sort()
+            : []
+
+          resolve({
+            topProducts: sortedProducts.slice(0, 10),
+            bottomProducts: sortedProducts.slice(-5).reverse(),
+            top10Products: sortedProducts.slice(0, 10),
+            storeSales: sortedStores,
+            categorySales: sortedCategories,
+            monthlyChart,
+            uniqueStores,
+            uniqueCategories,
+          })
+        } catch (err) {
+          reject(err)
+        }
+      }
+      reader.onerror = reject
+      reader.readAsText(file)
+    })
+  }
+
   async function handleContinue() {
     if (!uploadedFile || loading) return
     setLoading(true)
     setError(null)
 
     try {
-      const startedAt = Date.now()
-
-      setLoadingStep('Running forecast model...')
-      await wait(180)
+      setLoadingStep('Reading your data...')
+      const csvData = await parseCSV(uploadedFile)
 
       setLoadingStep('Calculating KPIs...')
-      const dashboardRequest = Promise.all([
-        getForecastKpis(uploadedFile, 30),
-        getFutureForecast(uploadedFile, 90, { fast: true }),
-        runAlerts(uploadedFile),
-      ])
+      const kpiResult = await getForecastKpis(uploadedFile, 30)
 
-      await wait(180)
       setLoadingStep('Generating forecast chart...')
-      await wait(180)
+      const forecastResult = await getFutureForecast(uploadedFile, 90, { fast: true })
+
       setLoadingStep('Scanning for alerts...')
-
-      const [kpiResult, forecastResult, alertsResult] = await dashboardRequest
-
-      const remainingAnimationTime = MIN_LOADING_MS - (Date.now() - startedAt)
-      if (remainingAnimationTime > 0) {
-        await wait(remainingAnimationTime)
-      }
+      const alertsResult = await runAlerts(uploadedFile)
 
       setLoadingStep('Almost there...')
-      await wait(120)
       navigate('/dashboard', {
         state: {
           kpiData: kpiResult,
           forecastData: forecastResult,
           alertsData: alertsResult,
           fileName: uploadedFile.name,
+          csvData: csvData,
         }
       })
 
@@ -125,6 +201,10 @@ function UploadPage() {
               <p className="upload-loading-title">Analyzing your data</p>
               <p className="upload-loading-step">{loadingStep}</p>
               <div className="upload-loading-steps">
+                <div className={`upload-step-item ${loadingStep.includes('Reading') ? 'active' : ''} ${loadingStep.includes('forecast model') || loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                  <span className="upload-step-dot" />
+                  <span>Reading your data</span>
+                </div>
                 <div className={`upload-step-item ${loadingStep.includes('forecast model') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Running forecast model</span>
@@ -217,6 +297,7 @@ function UploadPage() {
 
         </div>
       </div>
+
     </div>
   )
 }

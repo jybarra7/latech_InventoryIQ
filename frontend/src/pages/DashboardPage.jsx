@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts'
 import './DashboardPage.css'
 
 const mockData = {
@@ -52,6 +55,12 @@ const mockData = {
   stores: ['Store 1', 'Store 2', 'Store 3', 'Store 4', 'Store 5'],
 }
 
+const BAR_COLORS = [
+  '#1565c0', '#1976d2', '#1e88e5', '#2196f3',
+  '#42a5f5', '#0288d1', '#0097a7', '#00838f',
+  '#006064', '#0d47a1'
+]
+
 function fmt(n) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`
@@ -70,9 +79,18 @@ function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const apiState = location.state
-  const kpis       = apiState?.kpiData    ?? mockData.kpis
-  const alertsData = apiState?.alertsData ?? mockData.alertsData
-  const fileName   = apiState?.fileName   ?? mockData.fileName
+  const kpis           = apiState?.kpiData      ?? mockData.kpis
+  const alertsData     = apiState?.alertsData   ?? mockData.alertsData
+  const fileName       = apiState?.fileName     ?? mockData.fileName
+  const csvData        = apiState?.csvData      ?? null
+  const topProducts    = csvData?.topProducts    ?? mockData.topProducts
+  const bottomProducts = csvData?.bottomProducts ?? mockData.bottomProducts
+  const top10Products  = csvData?.top10Products  ?? mockData.topProducts
+  const storeSales     = csvData?.storeSales     ?? []
+  const categorySales  = csvData?.categorySales  ?? []
+  const monthlyChart   = csvData?.monthlyChart   ?? mockData.forecastChart
+  const uniqueStores   = csvData?.uniqueStores   ?? mockData.stores
+  const uniqueCategories = csvData?.uniqueCategories ?? mockData.categories
 
   const forecastChart = apiState?.forecastData?.forecast_records
     ? (() => {
@@ -105,6 +123,14 @@ function DashboardPage() {
     alertsData,
     fileName,
     forecastChart,
+    topProducts,
+    bottomProducts,
+    top10Products,
+    storeSales,
+    categorySales,
+    monthlyChart,
+    stores: uniqueStores,
+    categories: uniqueCategories,
   }
 
   function toggleStore(store) {
@@ -132,13 +158,11 @@ function DashboardPage() {
   return (
     <div className="db">
 
-      {/* Overlay */}
       <div
         className={`db-sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
 
-      {/* ── Sidebar ── */}
       <aside className={`db-sidebar ${sidebarOpen ? 'open' : ''}`}>
 
         <div className="db-sidebar-logo" onClick={() => navigate('/')}>
@@ -149,9 +173,9 @@ function DashboardPage() {
           <p className="db-sidebar-label">Menu</p>
           <nav className="db-nav">
             {[
-              { id: 'overview', icon: '📊', label: 'Overview'  },
-              { id: 'products', icon: '🏆', label: 'Products'  },
-              { id: 'analysis', icon: '📈', label: 'Analysis'  },
+              { id: 'overview', icon: '📊', label: 'Overview' },
+              { id: 'products', icon: '🏆', label: 'Products' },
+              { id: 'analysis', icon: '📈', label: 'Analysis' },
             ].map(item => (
               <button
                 key={item.id}
@@ -171,13 +195,7 @@ function DashboardPage() {
           <div className="db-radio-group">
             {HORIZONS.map(h => (
               <label key={h} className="db-radio-item">
-                <input
-                  type="radio"
-                  name="horizon"
-                  value={h}
-                  checked={horizon === h}
-                  onChange={() => setHorizon(h)}
-                />
+                <input type="radio" name="horizon" value={h} checked={horizon === h} onChange={() => setHorizon(h)} />
                 <span>{h}</span>
               </label>
             ))}
@@ -187,18 +205,12 @@ function DashboardPage() {
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">
             Stores
-            {selectedStores.length > 0 &&
-              <span className="db-filter-count">{selectedStores.length}</span>
-            }
+            {selectedStores.length > 0 && <span className="db-filter-count">{selectedStores.length}</span>}
           </p>
           <div className="db-checkbox-group">
             {data.stores.map(store => (
               <label key={store} className="db-checkbox-item">
-                <input
-                  type="checkbox"
-                  checked={selectedStores.includes(store)}
-                  onChange={() => toggleStore(store)}
-                />
+                <input type="checkbox" checked={selectedStores.includes(store)} onChange={() => toggleStore(store)} />
                 <span>{store}</span>
               </label>
             ))}
@@ -208,18 +220,12 @@ function DashboardPage() {
         <div className="db-sidebar-section">
           <p className="db-sidebar-label">
             Categories
-            {selectedCategories.length > 0 &&
-              <span className="db-filter-count">{selectedCategories.length}</span>
-            }
+            {selectedCategories.length > 0 && <span className="db-filter-count">{selectedCategories.length}</span>}
           </p>
           <div className="db-checkbox-group">
             {data.categories.map(cat => (
               <label key={cat} className="db-checkbox-item">
-                <input
-                  type="checkbox"
-                  checked={selectedCategories.includes(cat)}
-                  onChange={() => toggleCategory(cat)}
-                />
+                <input type="checkbox" checked={selectedCategories.includes(cat)} onChange={() => toggleCategory(cat)} />
                 <span>{cat}</span>
               </label>
             ))}
@@ -228,9 +234,7 @@ function DashboardPage() {
 
         <div className="db-sidebar-bottom">
           {hasActiveFilters && (
-            <button className="db-reset-btn" onClick={resetFilters}>
-              ↺ Reset Filters
-            </button>
+            <button className="db-reset-btn" onClick={resetFilters}>↺ Reset Filters</button>
           )}
           <div className="db-file-chip">
             <span>📄</span>
@@ -243,13 +247,10 @@ function DashboardPage() {
 
       </aside>
 
-      {/* ── Main ── */}
       <div className="db-main">
         <header className="db-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button className="db-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
-              ☰
-            </button>
+            <button className="db-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
             <div className="db-header-left">
               <h1 className="db-header-title">
                 {activeTab === 'overview' && 'Dashboard Overview'}
@@ -269,7 +270,7 @@ function DashboardPage() {
         <div className="db-content">
           {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} />}
           {activeTab === 'products' && <ProductsTab data={data} />}
-          {activeTab === 'analysis' && <AnalysisTab />}
+          {activeTab === 'analysis' && <AnalysisTab data={data} />}
         </div>
       </div>
 
@@ -279,7 +280,7 @@ function DashboardPage() {
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
 function OverviewTab({ data, horizon }) {
-  const { kpis, alertsData, forecastChart } = data
+  const { kpis, alertsData, forecastChart, monthlyChart } = data
   const alerts = alertsData?.alerts ?? []
   const bad = alerts.filter(a => a.severity >= 1.5)
 
@@ -292,6 +293,21 @@ function OverviewTab({ data, horizon }) {
     return fmt(base * 0.24)
   }
 
+  const combinedChart = (() => {
+    const merged = {}
+    monthlyChart.forEach(d => {
+      merged[d.date] = { date: d.date, actual: d.total_sales ?? d.value ?? null, forecast: null }
+    })
+    forecastChart.forEach(d => {
+      if (merged[d.date]) {
+        merged[d.date].forecast = d.value ?? null
+      } else {
+        merged[d.date] = { date: d.date, actual: null, forecast: d.value ?? null }
+      }
+    })
+    return Object.values(merged).sort((a, b) => String(a.date).localeCompare(String(b.date)))
+  })()
+
   return (
     <div className="tab">
 
@@ -299,24 +315,21 @@ function OverviewTab({ data, horizon }) {
         <span className="ai-insight-icon">✦</span>
         <span className="ai-insight-label">AI INSIGHT</span>
         <span className="ai-insight-text">
-          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae}. {bad.length} products need your attention.
+          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae ?? 'N/A'}. {bad.length} products need your attention.
         </span>
         <button className="ai-insight-btn">Full Summary</button>
       </div>
 
       <div className="kpi-grid">
-
         <div className="kpi-hero">
           <div className="kpi-hero-bg" />
           <p className="kpi-hero-label">Total Revenue</p>
           <p className="kpi-hero-value">{fmt(kpis.total_sales)}</p>
         </div>
-
         <div className="kpi-card">
           <p className="kpi-label">Sales Trend</p>
           <p className="kpi-value" style={{textTransform:'capitalize'}}>{kpis.forecast_direction}</p>
         </div>
-
         <div className="kpi-card" style={{
           background: (alertsData?.total ?? 0) === 0
             ? 'linear-gradient(135deg, #14532d 0%, #16a34a 100%)'
@@ -331,52 +344,33 @@ function OverviewTab({ data, horizon }) {
             {(alertsData?.total ?? 0) === 0 ? '✅ All clear' : `⚠ ${bad.length} need attention`}
           </p>
         </div>
-
         <div className="kpi-card">
           <p className="kpi-label">Projected Revenue</p>
           <p className="kpi-value">{projectedRevenue()}</p>
           <p className="kpi-delta kpi-neutral">→ {horizon}</p>
         </div>
-
       </div>
 
       <div className="bottom-row">
-
         <div className="panel">
           <p className="panel-title">Sales Forecast</p>
           <p className="panel-sub">Historical performance vs projected growth</p>
           <div className="chart-legend">
-            <span><span className="chart-dot chart-dot-navy" />Actual Sales</span>
-            <span><span className="chart-dot chart-dot-blue" />Forecast</span>
+            <span><span className="chart-dot" style={{background:'#1e3a5f', display:'inline-block', width:8, height:8, borderRadius:'50%', marginRight:4}} />Historical</span>
+            <span><span className="chart-dot" style={{background:'#2196f3', display:'inline-block', width:8, height:8, borderRadius:'50%', marginRight:4}} />Forecast</span>
           </div>
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={forecastChart} margin={{ top: 10, right: 20, left: 60, bottom: 0 }}>
+              <LineChart data={combinedChart} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: '#8aaac8' }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval={Math.floor(forecastChart.length / 8)}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#8aaac8' }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={v => `${v.toLocaleString()}`}
-                  width={80}
-                />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} interval={Math.floor(combinedChart.length / 8)} />
+                <YAxis tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} width={60} />
                 <Tooltip
                   contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#1e3a5f', fontWeight: 600 }}
-                  formatter={(value, name) => [
-                    `${value.toLocaleString()} units`,
-                    name === 'value' ? '📈 Forecast' : '📊 Actual'
-                  ]}
+                  formatter={(value, name) => [fmt(value), name === 'actual' ? '📊 Historical' : '📈 Forecast']}
                 />
-                <Line type="monotone" dataKey="actual" stroke="#1e3a5f" strokeWidth={2} dot={false} name="actual" />
-                <Line type="monotone" dataKey="value" stroke="#2196f3" strokeWidth={2.5} dot={false} name="value" strokeDasharray="5 5" activeDot={{ r: 5, fill: '#2196f3' }} />
+                <Line type="monotone" dataKey="actual" stroke="#1e3a5f" strokeWidth={2.5} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="forecast" stroke="#2196f3" strokeWidth={2.5} dot={false} strokeDasharray="5 5" connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -401,12 +395,7 @@ function OverviewTab({ data, horizon }) {
                 ? `⚠️ Sales have unexpectedly dropped — this item may need attention`
                 : `✅ Sales have unexpectedly spiked — this item is performing above normal`
               return (
-                <div key={i} className="alert-row" style={{
-                  borderLeftColor: borderColor,
-                  backgroundColor: cardColor,
-                  borderRadius: '8px',
-                  marginBottom: '0.5rem'
-                }}>
+                <div key={i} className="alert-row" style={{ borderLeftColor: borderColor, backgroundColor: cardColor, borderRadius: '8px', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '2px' }}>
                     {isDown ? '📉' : '📈'}
                   </span>
@@ -425,22 +414,26 @@ function OverviewTab({ data, horizon }) {
             })}
           </div>
         </div>
-
       </div>
+
     </div>
   )
 }
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
 function ProductsTab({ data }) {
+  const { topProducts, bottomProducts, top10Products } = data
+  const chartData = top10Products.slice(0, 10).map(p => ({ name: p.product, revenue: p.total_sales })).reverse()
+
   return (
     <div className="tab">
+
       <div className="two-col">
         <div className="panel">
           <p className="panel-title">Top Performers</p>
           <p className="panel-sub">Products driving the most revenue</p>
           <div style={{marginTop: '1rem'}}>
-            {data.topProducts.map((row, i) => (
+            {topProducts.slice(0, 5).map((row, i) => (
               <div key={i} className="product-row">
                 <div className="product-left">
                   <span className="rank rank-blue">{i + 1}</span>
@@ -455,7 +448,7 @@ function ProductsTab({ data }) {
           <p className="panel-title">Underperformers</p>
           <p className="panel-sub">Products generating the least revenue</p>
           <div style={{marginTop: '1rem'}}>
-            {data.bottomProducts.map((row, i) => (
+            {bottomProducts.slice(0, 5).map((row, i) => (
               <div key={i} className="product-row">
                 <div className="product-left">
                   <span className="rank rank-red">{i + 1}</span>
@@ -467,40 +460,183 @@ function ProductsTab({ data }) {
           </div>
         </div>
       </div>
+
       <div className="panel">
         <p className="panel-title">Top 10 Products by Revenue</p>
-        <p className="panel-sub">Your highest earning products</p>
-        <div className="chart-zone chart-tall">📊 Recharts bar chart — Mira wires in here</div>
-      </div>
-      <div className="two-col">
-        <div className="panel">
-          <p className="panel-title">Top 5 Product Trends</p>
-          <p className="panel-sub">Growing or declining month over month?</p>
-          <div className="chart-zone chart-tall">📈 Recharts line chart — Mira wires in here</div>
+        <p className="panel-sub">Your highest earning products across all stores</p>
+        <div className="chart-wrap">
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ top: 10, right: 80, left: 20, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+              <XAxis
+                type="number"
+                tick={{ fontSize: 10, fill: '#8aaac8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => fmt(v)}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ fontSize: 10, fill: '#1e3a5f', fontWeight: 500 }}
+                axisLine={false}
+                tickLine={false}
+                width={160}
+                interval={0}
+              />
+              <Tooltip
+                contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
+                formatter={(value, name, props) => [fmt(value), props.payload.name]}
+                labelFormatter={() => ''}
+              />
+              <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
+                {chartData.map((_, i) => (
+                  <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-        <div className="panel">
-          <p className="panel-title">Month-over-Month</p>
-          <p className="panel-sub">Biggest movers vs last month</p>
-          <div className="chart-zone chart-tall">📊 MoM leaderboard — Mira wires in here</div>
-        </div>
       </div>
+
     </div>
   )
 }
 
-// ── ANALYSIS ──────────────────────────────────────────════════════════════════
-function AnalysisTab() {
+// ── ANALYSIS ──────────────────────────────────────────────────────────────────
+function AnalysisTab({ data }) {
+  const { categorySales, storeSales, monthlyChart } = data
+
+  // Build year-over-year data
+  const yoyData = (() => {
+    const byYearMonth = {}
+    monthlyChart.forEach(d => {
+      const year = d.date.slice(0, 4)
+      const month = d.date.slice(5, 7)
+      if (!byYearMonth[month]) byYearMonth[month] = { month }
+      byYearMonth[month][year] = d.total_sales
+    })
+    return Object.values(byYearMonth).sort((a, b) => a.month.localeCompare(b.month))
+  })()
+
+  const years = [...new Set(monthlyChart.map(d => d.date.slice(0, 4)))].sort()
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
   return (
     <div className="tab">
       <div className="panel">
-        <p className="panel-title">Category Revenue Trends</p>
-        <p className="panel-sub">Monthly revenue per category</p>
-        <div className="chart-zone chart-tall">📈 Recharts category trends — Mira wires in here</div>
+        <p className="panel-title">Year-over-Year Revenue Comparison</p>
+        <p className="panel-sub">Monthly revenue compared across each year in your dataset</p>
+        <div className="chart-wrap">
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={yoyData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 10, fill: '#8aaac8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={m => MONTHS[parseInt(m) - 1]}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#8aaac8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => fmt(v)}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
+                formatter={(value, name) => [fmt(value), name]}
+                labelFormatter={m => MONTHS[parseInt(m) - 1]}
+              />
+              {years.map((year, i) => (
+                <Line
+                  key={year}
+                  type="monotone"
+                  dataKey={year}
+                  stroke={BAR_COLORS[i % BAR_COLORS.length]}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 5 }}
+                  name={`Year ${year}`}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-      <div className="panel">
-        <p className="panel-title">Store Comparison</p>
-        <p className="panel-sub">Total revenue by store</p>
-        <div className="chart-zone chart-tall">📊 Recharts store bar chart — Mira wires in here</div>
+
+      <div className="two-col">
+        <div className="panel">
+          <p className="panel-title">Revenue by Category</p>
+          <p className="panel-sub">Total sales per category</p>
+          {categorySales.length === 0 ? (
+            <div className="chart-zone" style={{minHeight: '200px', marginTop: '1rem'}}>No category data in this dataset</div>
+          ) : (
+            <div className="chart-wrap">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={categorySales.map(c => ({ name: c.category, revenue: c.total_sales }))}
+                  margin={{ top: 10, right: 20, left: 10, bottom: 50 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} width={60} />
+                  <Tooltip
+                    contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
+                    formatter={(value) => [fmt(value), 'Revenue']}
+                  />
+                  <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                    {categorySales.map((_, i) => (
+                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <p className="panel-title">Store Comparison</p>
+          <p className="panel-sub">Total revenue by store</p>
+          {storeSales.length === 0 ? (
+            <div className="chart-zone" style={{minHeight: '200px', marginTop: '1rem'}}>No store data in this dataset</div>
+          ) : (
+            <div className="chart-wrap">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={storeSales
+                    .sort((a, b) => {
+                      const numA = parseInt(String(a.store).replace(/\D/g, '')) || 0
+                      const numB = parseInt(String(b.store).replace(/\D/g, '')) || 0
+                      return numA - numB
+                    })
+                    .map(s => ({ name: `Store ${s.store}`, revenue: s.total_sales }))}
+                  margin={{ top: 10, right: 20, left: 10, bottom: 50 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} width={60} />
+                  <Tooltip
+                    contentStyle={{ background: '#fff', border: '1px solid #dce3ed', borderRadius: 8, fontSize: 12 }}
+                    formatter={(value) => [fmt(value), 'Revenue']}
+                  />
+                  <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                    {storeSales.map((_, i) => (
+                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
