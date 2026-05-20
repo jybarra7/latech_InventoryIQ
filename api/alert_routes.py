@@ -6,6 +6,7 @@ Thin routes - all business logic lives in models/alerter.py.
 from __future__ import annotations
 
 import io
+import re
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -29,10 +30,45 @@ async def run_alerts(
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
-        df = df.rename(columns={
-            "store": "store_id",
-            "item": "product_id",
-        })
+
+        def normalize_col(name: str) -> str:
+            name = str(name).strip().lower()
+            name = re.sub(r"[\s\-\/]+", "_", name)
+            name = re.sub(r"[^a-z0-9_]", "", name)
+            name = re.sub(r"_+", "_", name).strip("_")
+            return name
+
+        df.columns = [normalize_col(col) for col in df.columns]
+
+        rename_map = {}
+
+        if "store_id" not in df.columns:
+            for candidate in ["store", "store_id", "store_name", "store_number", "branch"]:
+                if candidate in df.columns:
+                    rename_map[candidate] = "store_id"
+                    break
+
+        if "product_id" not in df.columns:
+            for candidate in ["item", "item_id", "item_name", "product", "product_id", "product_name", "sku"]:
+                if candidate in df.columns:
+                    rename_map[candidate] = "product_id"
+                    break
+
+        if "date" not in df.columns:
+            for candidate in ["date", "order_date", "transaction_date", "invoice_date", "sale_date"]:
+                if candidate in df.columns:
+                    rename_map[candidate] = "date"
+                    break
+
+        if "sales" not in df.columns:
+            for candidate in ["sales", "revenue", "amount", "total", "price", "total_sales"]:
+                if candidate in df.columns:
+                    rename_map[candidate] = "sales"
+                    break
+
+        if rename_map:
+            df = df.rename(columns=rename_map)
+
     except Exception:
         raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
 
