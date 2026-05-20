@@ -31,3 +31,4 @@ AGENTS.md
 
 # Ignore local test files
 utils/test_*.py
+frontend/node_modules/
