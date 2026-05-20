@@ -6,12 +6,12 @@ Thin routes - all business logic lives in models/alerter.py.
 from __future__ import annotations
 
 import io
-import re
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from models.alerter import run_all_alerts
+from utils.schema import normalize_retail_columns
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -30,50 +30,13 @@ async def run_alerts(
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        df = normalize_retail_columns(df)
 
-        def normalize_col(name: str) -> str:
-            name = str(name).strip().lower()
-            name = re.sub(r"[\s\-\/]+", "_", name)
-            name = re.sub(r"[^a-z0-9_]", "", name)
-            name = re.sub(r"_+", "_", name).strip("_")
-            return name
+        if "product_id" not in df.columns and "product_name" in df.columns:
+            df["product_id"] = df["product_name"]
 
-        df.columns = [normalize_col(col) for col in df.columns]
-
-        rename_map = {}
-
-        if "store_id" not in df.columns:
-            for candidate in ["store", "store_id", "store_name", "store_number", "branch"]:
-                if candidate in df.columns:
-                    rename_map[candidate] = "store_id"
-                    break
-
-        if "product_id" not in df.columns:
-            for candidate in ["product_id", "item_id", "sku"]:
-                if candidate in df.columns:
-                    rename_map[candidate] = "product_id"
-                    break
-
-        if "product_name" not in df.columns:
-            for candidate in ["product_name", "item_name", "product", "item", "name", "description"]:
-                if candidate in df.columns:
-                    rename_map[candidate] = "product_name"
-                    break
-
-        if "date" not in df.columns:
-            for candidate in ["date", "order_date", "transaction_date", "invoice_date", "sale_date"]:
-                if candidate in df.columns:
-                    rename_map[candidate] = "date"
-                    break
-
-        if "sales" not in df.columns:
-            for candidate in ["sales", "revenue", "amount", "total", "price", "total_sales"]:
-                if candidate in df.columns:
-                    rename_map[candidate] = "sales"
-                    break
-
-        if rename_map:
-            df = df.rename(columns=rename_map)
+        if "store_id" not in df.columns and "store" in df.columns:
+            df["store_id"] = df["store"]
 
     except Exception:
         raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
