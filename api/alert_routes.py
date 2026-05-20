@@ -38,9 +38,10 @@ async def run_alerts(
         if "store_id" not in df.columns and "store" in df.columns:
             df["store_id"] = df["store"]
 
-    except Exception:
-        raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Alert route preprocessing failed: {str(e)}")
 
+    
     thresholds = {
         "anomaly_std": anomaly_std,
         "decline_pct": decline_pct,
