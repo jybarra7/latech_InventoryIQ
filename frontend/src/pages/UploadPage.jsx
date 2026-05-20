@@ -202,7 +202,7 @@ function UploadPage() {
     return msg.replace('Upload error:', '').replace('Input dataframe is missing required columns:', 'Missing required columns:').trim()
   }
 
-  async function handleContinue() {
+async function handleContinue() {
   if (!uploadedFile || loading) return
 
   setLoading(true)
@@ -239,6 +239,7 @@ function UploadPage() {
     setLoadingStep('')
   }
 }
+  
   return (
     <div className="upload-page">
 
