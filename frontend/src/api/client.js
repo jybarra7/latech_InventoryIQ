@@ -68,4 +68,14 @@ export const getForecastKpis = async (file, futureDays = 30) => {
   return response.data;
 };
 
+export const runAlerts = async (file) => {
+  const formData = buildFileFormData(file);
+
+  const response = await api.post("/alerts/run", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  return response.data;
+};
+
 export default api;
