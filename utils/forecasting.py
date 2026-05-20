@@ -11,6 +11,7 @@ DEFAULT_GROUP_COLS = ["store", "item"]
 DEFAULT_TARGET_COL = "sales"
 DEFAULT_DATE_COL = "date"
 LIGHTGBM_METHOD = "lightgbm_global_lag"
+SIMPLE_FUTURE_METHOD = "simple_last_value_future"
 FEATURE_REGRESSION_METHOD = "feature_based_regression"
 FEATURE_REGRESSION_LAGS = [1, 3, 7]
 FEATURE_REGRESSION_ROLLING_WINDOWS = [3, 7, 28]
@@ -63,6 +64,8 @@ def evaluate_forecast(actual: pd.Series, prediction: pd.Series) -> dict[str, flo
     }
 
 
+import re
+
 # Category: Data prep
 # Summary: Standardizes different retail CSV schemas so the forecasting functions can all expect date/store/item/sales columns instead of each function handling naming differences itself.
 def prepare_forecast_input(
@@ -74,25 +77,73 @@ def prepare_forecast_input(
     """Normalize supported retail schemas into date/store/item/sales shape."""
     prepared = df.copy()
 
+    def normalize_col(name: str) -> str:
+        name = str(name).strip().lower()
+        name = re.sub(r"[\s\-\/]+", "_", name)
+        name = re.sub(r"[^a-z0-9_]", "", name)
+        name = re.sub(r"_+", "_", name).strip("_")
+        return name
+
+    original_to_normalized = {col: normalize_col(col) for col in prepared.columns}
+    prepared = prepared.rename(columns=original_to_normalized)
+
+    cols = list(prepared.columns)
+
+    DATE_CANDIDATES = [
+        "date", "order_date", "transaction_date", "invoice_date", "sale_date"
+    ]
+    STORE_CANDIDATES = [
+        "store", "store_id", "store_name", "store_number", "branch", "branch_id", "location"
+    ]
+    ITEM_CANDIDATES = [
+        "item", "item_id", "item_name", "product", "product_id", "product_name",
+        "sku", "description", "name"
+    ]
+    SALES_CANDIDATES = [
+        "sales", "sales_amount", "revenue", "amount", "total", "price", "total_sales"
+    ]
+
+    def first_match(candidates):
+        for c in candidates:
+            if c in cols:
+                return c
+        return None
+
     rename_map = {}
-    if "store" not in prepared.columns and "store_id" in prepared.columns:
-        rename_map["store_id"] = "store"
-    if "item" not in prepared.columns and "product_id" in prepared.columns:
-        rename_map["product_id"] = "item"
+
+    if "date" not in cols:
+        found = first_match(DATE_CANDIDATES)
+        if found:
+            rename_map[found] = "date"
+
+    if "store" not in cols:
+        found = first_match(STORE_CANDIDATES)
+        if found:
+            rename_map[found] = "store"
+
+    if "item" not in cols:
+        found = first_match(ITEM_CANDIDATES)
+        if found:
+            rename_map[found] = "item"
+
+    if "sales" not in cols:
+        found = first_match(SALES_CANDIDATES)
+        if found:
+            rename_map[found] = "sales"
+
     if rename_map:
         prepared = prepared.rename(columns=rename_map)
 
-    groups = group_cols or DEFAULT_GROUP_COLS
-    validate_input_frame(prepared, required_columns=[date_col, *groups, target_col])
+    groups = ["store", "item"]
+    validate_input_frame(prepared, required_columns=["date", *groups, "sales"])
 
-    prepared[date_col] = pd.to_datetime(prepared[date_col])
-    prepared[target_col] = pd.to_numeric(prepared[target_col], errors="coerce")
-    prepared = prepared.dropna(subset=[date_col, target_col, *groups]).copy()
+    prepared["date"] = pd.to_datetime(prepared["date"], errors="coerce")
+    prepared["sales"] = pd.to_numeric(prepared["sales"], errors="coerce")
+    prepared = prepared.dropna(subset=["date", "sales", *groups]).copy()
     if prepared.empty:
         raise ValueError("Input dataframe has no usable rows after cleaning.")
 
-    return prepared.sort_values([date_col, *groups]).reset_index(drop=True)
-
+    return prepared.sort_values(["date", *groups]).reset_index(drop=True)
 
 # Category: Data prep
 # Summary: Splits historical data by time, not randomly, so the models train on older rows and are tested on newer rows like a real forecasting workflow.
@@ -633,7 +684,7 @@ def _fit_lightgbm(
 
     model = LGBMRegressor(
         objective="regression",
-        n_estimators=350,
+        n_estimators=120,
         learning_rate=0.05,
         num_leaves=63,
         subsample=0.9,
@@ -813,6 +864,38 @@ def build_lightgbm_future_forecast(
         rolling_windows=window_values,
     )
     return _future_predictions_to_export(prediction_df, groups, date_col, LIGHTGBM_METHOD)
+
+
+def build_simple_future_forecast(
+    df: pd.DataFrame,
+    future_days: int,
+    group_cols: list[str] | None = None,
+    target_col: str = DEFAULT_TARGET_COL,
+    date_col: str = DEFAULT_DATE_COL,
+) -> pd.DataFrame:
+    """Andrew Garcia Leopold: build a fast fallback forecast for small uploaded datasets."""
+    if future_days <= 0:
+        raise ValueError("future_days must be positive.")
+
+    groups = group_cols or DEFAULT_GROUP_COLS
+    prepared = prepare_forecast_input(df, groups, target_col, date_col)
+    last_values = (
+        prepared.sort_values(date_col)
+        .groupby(groups, as_index=False)[target_col]
+        .last()
+        .rename(columns={target_col: "prediction"})
+    )
+
+    max_date = prepared[date_col].max()
+    predict_dates = pd.date_range(start=max_date + pd.Timedelta(days=1), periods=future_days, freq="D")
+    rows = []
+    for current_date in predict_dates:
+        day_predictions = last_values.copy()
+        day_predictions[date_col] = current_date
+        rows.append(day_predictions)
+
+    prediction_df = pd.concat(rows, ignore_index=True)
+    return _future_predictions_to_export(prediction_df, groups, date_col, SIMPLE_FUTURE_METHOD)
 
 
 # Category: Export helpers

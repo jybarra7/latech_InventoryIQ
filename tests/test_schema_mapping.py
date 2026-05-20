@@ -36,6 +36,26 @@ def test_standardize_column_names_handles_common_retail_headers() -> None:
     assert "Random Notes" in standardized.attrs["unmapped_columns"]
 
 
+def test_fuzzy_mapping_handles_typos_and_camel_case_headers() -> None:
+    df = pd.DataFrame({
+        "OrderDate": ["2024-01-01"],
+        "Sales Amnt": [125.50],
+        "StoreNum": [7],
+        "Prodct SKU": [1001],
+        "Product Catgory": ["Shirts"],
+        "UnitsSold": [3],
+    })
+
+    mapping = infer_column_mapping(df)
+
+    assert mapping["date"] == "OrderDate"
+    assert mapping["sales"] == "Sales Amnt"
+    assert mapping["store_id"] == "StoreNum"
+    assert mapping["product_id"] == "Prodct SKU"
+    assert mapping["category"] == "Product Catgory"
+    assert mapping["quantity"] == "UnitsSold"
+
+
 def test_item_column_uses_numbers_as_product_id() -> None:
     df = pd.DataFrame({
         "Date": ["2024-01-01"],
@@ -77,6 +97,7 @@ def test_map_to_standard_schema_creates_product_id_from_product_name() -> None:
 
 if __name__ == "__main__":
     test_standardize_column_names_handles_common_retail_headers()
+    test_fuzzy_mapping_handles_typos_and_camel_case_headers()
     test_item_column_uses_numbers_as_product_id()
     test_item_column_uses_text_as_product_name()
     test_map_to_standard_schema_creates_product_id_from_product_name()
