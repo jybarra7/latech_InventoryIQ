@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 
 from models.alerter import run_all_alerts
 from utils.processor import load_and_clean_data
+from utils.schema import normalize_retail_columns
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -41,6 +42,18 @@ async def run_alerts(
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+        df = normalize_retail_columns(df)
+
+        if "product_id" not in df.columns and "product_name" in df.columns:
+            df["product_id"] = df["product_name"]
+
+        if "store_id" not in df.columns and "store" in df.columns:
+            df["store_id"] = df["store"]
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Alert route preprocessing failed: {str(e)}")
+
+    
     thresholds = {
         "anomaly_std": anomaly_std,
         "decline_pct": decline_pct,
