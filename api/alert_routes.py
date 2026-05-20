@@ -6,11 +6,13 @@ Thin routes - all business logic lives in models/alerter.py.
 from __future__ import annotations
 
 import io
+from typing import List
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 
 from models.alerter import run_all_alerts
+from utils.processor import load_and_clean_data
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -21,20 +23,23 @@ async def run_alerts(
     anomaly_std: float = 2.0,
     decline_pct: float = 0.20,
     margin_floor: float = 0.0,
+    store: List[int] = Query(default=[]),
+    category: List[str] = Query(default=[]),
 ):
-    """
-    Retail CSV upload, runs all three alert detectors,
-    and returns sorted severity alerts for the dashboard alert panel.
-    """
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
-        df = df.rename(columns={
-            "store": "store_id",
-            "item": "product_id",
-        })
     except Exception:
         raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
+
+    try:
+        df = load_and_clean_data(df)
+        if store:
+            df = df[df['store_id'].isin(store)]
+        if category:
+            df = df[df['category'].isin(category)]
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     thresholds = {
         "anomaly_std": anomaly_std,
