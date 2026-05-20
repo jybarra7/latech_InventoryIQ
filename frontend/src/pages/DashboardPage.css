@@ -674,3 +674,12 @@
     font-size: 1.1rem;
   }
 }
+
+.chart-wrap {
+  margin-top: 0.75rem;
+  transition: opacity 0.3s ease;
+}
+
+.chart-wrap.updating {
+  opacity: 0.4;
+}

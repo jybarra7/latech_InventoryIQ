@@ -6,11 +6,13 @@ Thin routes - all business logic lives in models/alerter.py.
 from __future__ import annotations
 
 import io
+from typing import List
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 
 from models.alerter import run_all_alerts
+from utils.processor import load_and_clean_data
 from utils.schema import normalize_retail_columns
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -22,14 +24,24 @@ async def run_alerts(
     anomaly_std: float = 2.0,
     decline_pct: float = 0.20,
     margin_floor: float = 0.0,
+    store: List[int] = Query(default=[]),
+    category: List[str] = Query(default=[]),
 ):
-    """
-    Retail CSV upload, runs all three alert detectors,
-    and returns sorted severity alerts for the dashboard alert panel.
-    """
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
+
+    try:
+        df = load_and_clean_data(df)
+        if store:
+            df = df[df['store_id'].isin(store)]
+        if category:
+            df = df[df['category'].isin(category)]
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
         df = normalize_retail_columns(df)
 
         if "product_id" not in df.columns and "product_name" in df.columns:
