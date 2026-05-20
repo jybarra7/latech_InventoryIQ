@@ -187,9 +187,9 @@ def shape_kpi_payload(df: pd.DataFrame, forecast_result: dict) -> dict:
     if forecast_records:
         first_val = forecast_records[0].get("prediction", 0)
         last_val = forecast_records[-1].get("prediction", 0)
-        if last_val > first_val * 1.02:
+        if last_val > first_val * 1.05:
             direction = "increasing"
-        elif last_val < first_val * 0.98:
+        elif last_val < first_val * 0.95:
             direction = "declining"
         else:
             direction = "flat"
@@ -214,9 +214,9 @@ def shape_fast_kpi_payload(df: pd.DataFrame) -> dict:
         midpoint = max(1, len(daily_sales) // 2)
         earlier_average = float(daily_sales.iloc[:midpoint].mean())
         recent_average = float(daily_sales.iloc[midpoint:].mean())
-        if recent_average > earlier_average * 1.02:
+        if recent_average > earlier_average * 1.05:
             direction = "increasing"
-        elif recent_average < earlier_average * 0.98:
+        elif recent_average < earlier_average * 0.95:
             direction = "declining"
         else:
             direction = "flat"
