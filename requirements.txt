@@ -5,6 +5,6 @@ pandas==2.2.1
 numpy==1.26.4
 scikit-learn==1.4.1.post1
 lightgbm==4.6.0
-google-genai
+google-generativeai
 python-dotenv==1.0.1
 openpyxl==3.1.2
