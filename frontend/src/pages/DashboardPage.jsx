@@ -158,16 +158,23 @@ function DashboardPage() {
   useEffect(() => {
     if (!uploadedFile) return
 
-    // Clear stale filtered data immediately
     setFilteredKpis(null)
     setFilteredForecast(null)
-    setFilteredAlerts(null)
+
+    // Only clear alerts if store or region changed
+    if (selectedStores.length === 0 && selectedRegions.length === 0) {
+      // Keep existing alerts when only category filter changes
+    } else {
+      setFilteredAlerts(null)
+    }
 
     if (selectedStores.length > 0 || selectedCategories.length > 0 || horizon !== 'Next 90 days') {
       applyBackendFilters()
+    } else if (selectedStores.length === 0 && selectedCategories.length === 0 && horizon === 'Next 90 days') {
+      setFilteredAlerts(null)
     }
-  }, [selectedStores, selectedCategories, horizon])
-
+  }, [selectedStores, selectedCategories, horizon, selectedRegions])
+  
   async function applyBackendFilters() {
     if (!uploadedFile) return
     setIsFiltering(true)
@@ -178,15 +185,36 @@ function DashboardPage() {
       categories: selectedCategories,
     }
 
+    // Alerts only re-run when store or region changes
+    // Category filter does NOT affect alerts — business wide warnings
+    // should always show regardless of category view
+    const alertFilters = {
+      stores: selectedStores.map(s => parseInt(s)).filter(Boolean),
+    }
+
+    const onlyCategoryChanged = selectedStores.length === 0 &&
+      selectedRegions.length === 0 &&
+      selectedCategories.length > 0
+
     try {
-      const [kpiResult, forecastResult, alertsResult] = await Promise.all([
-        getForecastKpis(uploadedFile, 30, filters),
-        getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
-        runAlerts(uploadedFile, { filters }),
-      ])
-      setFilteredKpis(kpiResult)
-      setFilteredForecast(forecastResult)
-      setFilteredAlerts(alertsResult)
+      if (onlyCategoryChanged) {
+        // Skip alerts re-call — keeps existing alerts and saves a backend call
+        const [kpiResult, forecastResult] = await Promise.all([
+          getForecastKpis(uploadedFile, 30, filters),
+          getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
+        ])
+        setFilteredKpis(kpiResult)
+        setFilteredForecast(forecastResult)
+      } else {
+        const [kpiResult, forecastResult, alertsResult] = await Promise.all([
+          getForecastKpis(uploadedFile, 30, filters),
+          getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
+          runAlerts(uploadedFile, { filters: alertFilters }),
+        ])
+        setFilteredKpis(kpiResult)
+        setFilteredForecast(forecastResult)
+        setFilteredAlerts(alertsResult)
+      }
     } catch (err) {
       console.error('Filter API error:', err)
     } finally {
