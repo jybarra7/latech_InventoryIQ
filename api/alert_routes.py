@@ -30,17 +30,6 @@ async def run_alerts(
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Could not parse uploaded file as CSV.")
-
-    try:
-        df = load_and_clean_data(df)
-        if store:
-            df = df[df['store_id'].isin(store)]
-        if category:
-            df = df[df['category'].isin(category)]
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
 
         df = normalize_retail_columns(df)
 
@@ -53,7 +42,18 @@ async def run_alerts(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Alert route preprocessing failed: {str(e)}")
 
-    
+    try:
+        df = load_and_clean_data(df)
+
+        if store:
+            df = df[df["store_id"].isin(store)]
+
+        if category:
+            df = df[df["category"].isin(category)]
+
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     thresholds = {
         "anomaly_std": anomaly_std,
         "decline_pct": decline_pct,
