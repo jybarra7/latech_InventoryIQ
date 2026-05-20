@@ -102,14 +102,14 @@ function DashboardPage() {
   const uniqueRegions    = csvData?.uniqueRegions   ?? []
   const rawRows          = csvData?.rawRows         ?? null
 
-  // Guard — redirect if no file was uploaded
-  useEffect(() => {
-    if (!apiState) {
-      navigate('/upload', { replace: true })
-    }
-  }, [])
+  // Guard — redirect if no file was uploaded /
+//  useEffect(() => {
+//    if (!apiState) {
+//      navigate('/upload', { replace: true })
+//    }
+//  }, []) 
 
-  if (!apiState) return null
+//  if (!apiState) return null
 
   // Filter raw CSV data on frontend instantly
   const filteredCSV = rawRows ? (() => {
