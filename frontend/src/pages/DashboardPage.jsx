@@ -4,7 +4,7 @@ import {
   LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import { getForecastKpis, getFutureForecast, runAlerts } from '../api/client'
+import { getForecastKpis, getFutureForecast, runAlerts, getAiSummary } from '../api/client'
 import './DashboardPage.css'
 
 const mockData = {
@@ -90,6 +90,33 @@ function DashboardPage() {
   const [filteredForecast, setFilteredForecast] = useState(null)
   const [filteredAlerts, setFilteredAlerts] = useState(null)
   const [isFiltering, setIsFiltering] = useState(false)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const handleAiSummary = async () => {
+    setAiLoading(true)
+    try {
+      const alerts = (alertsData?.alerts ?? []).slice(0, 3).map(a => ({
+        product: a.product_name ?? a.product_id ?? "Unknown",
+        type: a.alert_type ?? "Unknown",
+        severity: a.severity ?? 0
+      }))
+      const payload = {
+        model: kpis.winner_model ?? "Unknown",
+        accuracy: kpis.mae ?? null,
+        trend: kpis.forecast_direction ?? "Unknown",
+        top_alerts: alerts,
+        top_product: "Unknown",
+        top_category: "Unknown"
+      }
+      const result = await getAiSummary(payload)
+      if (result.status === "success") setAiSummary(result.text)
+      else setAiSummary("AI summary unavailable.")
+    } catch (e) {
+      setAiSummary("AI summary unavailable.")
+    }
+    setAiLoading(false)
+  }
 
   const apiState = location.state
   const uploadedFile     = apiState?.file           ?? null
@@ -450,12 +477,12 @@ function DashboardPage() {
             {isFiltering && (
               <span style={{ fontSize: '0.78rem', color: '#8aaac8' }}>⟳ Updating...</span>
             )}
-            <button className="db-ai-btn">✦ AI Summary</button>
+            <button className="db-ai-btn" onClick={handleAiSummary} disabled={aiLoading}>{aiLoading ? "Generating..." : "✦ AI Summary"}</button>
           </div>
         </header>
 
         <div className="db-content">
-          {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} isFiltering={isFiltering} />}
+          {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} isFiltering={isFiltering} aiSummary={aiSummary} handleAiSummary={handleAiSummary} aiLoading={aiLoading} />}
           {activeTab === 'products' && <ProductsTab data={data} isFiltering={isFiltering} />}
           {activeTab === 'analysis' && <AnalysisTab data={data} isFiltering={isFiltering} />}
         </div>
@@ -466,7 +493,7 @@ function DashboardPage() {
 }
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
-function OverviewTab({ data, horizon, isFiltering }) {
+function OverviewTab({ data, horizon, isFiltering, aiSummary, handleAiSummary, aiLoading }) {
   const { kpis, alertsData, forecastChart, monthlyChart } = data
   const alerts = alertsData?.alerts ?? []
 
@@ -502,9 +529,9 @@ function OverviewTab({ data, horizon, isFiltering }) {
         <span className="ai-insight-icon">✦</span>
         <span className="ai-insight-label">AI INSIGHT</span>
         <span className="ai-insight-text">
-          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae ?? 'N/A'}. {alerts.length} products need your attention.
+          {aiSummary ?? `Sales are ${kpis.forecast_direction} — model accuracy MAE ${kpis.mae ?? 'N/A'}. ${alerts.length} products need your attention.`}
         </span>
-        <button className="ai-insight-btn">Full Summary</button>
+        <button className="ai-insight-btn" onClick={handleAiSummary} disabled={aiLoading}>Full Summary</button>
       </div>
 
       <div className="kpi-grid">

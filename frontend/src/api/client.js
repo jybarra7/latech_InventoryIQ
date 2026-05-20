@@ -115,3 +115,10 @@ export const runAlerts = async (
 };
 
 export default api;
+
+export const getAiSummary = async (payload) => {
+  const response = await api.post("/summary/generate", payload, {
+    headers: { "Content-Type": "application/json" },
+  });
+  return response.data;
+};

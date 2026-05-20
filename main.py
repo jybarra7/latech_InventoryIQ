@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.forecast_routes import router as forecast_router
 from api.alert_routes import router as alert_router
+from api.summary_routes import summary_router
 
 app = FastAPI(
     title="InventoryIQ",
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(forecast_router)
 app.include_router(alert_router)
+app.include_router(summary_router)
 
 frontend_dist = Path("frontend/dist")
 
