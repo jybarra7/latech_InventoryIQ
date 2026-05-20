@@ -203,42 +203,42 @@ function UploadPage() {
   }
 
   async function handleContinue() {
-    if (!uploadedFile || loading) return
-    setLoading(true)
-    setError(null)
+  if (!uploadedFile || loading) return
 
-    try {
-      setLoadingStep('Reading your data...')
-      const csvData = await parseCSV(uploadedFile)
+  setLoading(true)
+  setError(null)
+  setLoadingStep('Reading your data...')
 
-      setLoadingStep('Calculating KPIs...')
-      const kpiResult = await getForecastKpis(uploadedFile, 30)
+  try {
+    const csvData = await parseCSV(uploadedFile)
 
-      setLoadingStep('Generating forecast chart...')
-      const forecastResult = await getFutureForecast(uploadedFile, 90, { fast: true })
+    setLoadingStep('Processing your dashboard...')
 
-      setLoadingStep('Scanning for alerts...')
-      const alertsResult = await runAlerts(uploadedFile)
+    const [kpiResult, forecastResult, alertsResult] = await Promise.all([
+      getForecastKpis(uploadedFile, 30),
+      getFutureForecast(uploadedFile, 90, { fast: true }),
+      runAlerts(uploadedFile),
+    ])
 
-      setLoadingStep('Almost there...')
-      navigate('/dashboard', {
-        state: {
-          kpiData: kpiResult,
-          forecastData: forecastResult,
-          alertsData: alertsResult,
-          fileName: uploadedFile.name,
-          csvData: csvData,
-          file: uploadedFile,
-        }
-      })
+    setLoadingStep('Almost there...')
 
-    } catch (err) {
-      setError(parseApiError(err))
-      setLoading(false)
-      setLoadingStep('')
-    }
+    navigate('/dashboard', {
+      state: {
+        kpiData: kpiResult,
+        forecastData: forecastResult,
+        alertsData: alertsResult,
+        fileName: uploadedFile.name,
+        csvData,
+        file: uploadedFile,
+      }
+    })
+  } catch (err) {
+    setError(parseApiError(err))
+  } finally {
+    setLoading(false)
+    setLoadingStep('')
   }
-
+}
   return (
     <div className="upload-page">
 
@@ -400,16 +400,16 @@ function UploadPage() {
                 <div className="upload-error">
                   <p className="upload-error-title">⚠️ Unable to process your file</p>
                   <p className="upload-error-body">{formatError(error)}</p>
-                  {error.toLowerCase().includes('not found') || error.toLowerCase().includes('network') || error.toLowerCase().includes('localhost') ? (
-                    <p className="upload-error-hint">Make sure the backend server is running</p>
+              {error.toLowerCase().includes('network') || error.toLowerCase().includes('timeout') ? (
+                    <p className="upload-error-hint">Try a smaller file first, then try again on the same network.</p>
                   ) : null}
-                </div>
-              )}
+               </div>
+            )}
 
               <button
                 className={`upload-btn ${uploadedFile ? 'active' : 'disabled'}`}
                 onClick={handleContinue}
-                disabled={!uploadedFile}
+                disabled={!uploadedFile || loading}
               >
                 {uploadedFile ? 'Continue to Dashboard →' : 'Select a file to continue'}
               </button>
