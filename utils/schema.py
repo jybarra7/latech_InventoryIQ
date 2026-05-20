@@ -69,12 +69,13 @@ def normalize_retail_columns(df: pd.DataFrame) -> pd.DataFrame:
         if canonical and col != canonical and canonical not in prepared.columns:
             rename_map[col] = canonical
 
-       if rename_map:
+    if rename_map:
         prepared = prepared.rename(columns=rename_map)
 
     prepared = prepared.loc[:, ~prepared.columns.duplicated()]
 
     if "store" not in prepared.columns and "store_id" in prepared.columns:
+        prepared["store"] = prepared["store_id"]
 
     if "item" not in prepared.columns:
         if "product_name" in prepared.columns:
