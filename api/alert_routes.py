@@ -48,8 +48,8 @@ async def run_alerts(
                     rename_map[candidate] = "store_id"
                     break
 
-        if "product_id" not in df.columns:
-            for candidate in ["item", "item_id", "item_name", "product", "product_id", "product_name", "sku"]:
+       if "product_id" not in df.columns:
+            for candidate in ["product_id", "item_id", "sku"]:
                 if candidate in df.columns:
                     rename_map[candidate] = "product_id"
                     break
