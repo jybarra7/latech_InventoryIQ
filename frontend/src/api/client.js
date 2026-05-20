@@ -33,7 +33,6 @@ export const runForecast = async (file, horizonDays = 90) => {
 
   const response = await api.post("/forecast/run", formData, {
     params: { horizon_days: horizonDays },
-    headers: { "Content-Type": "multipart/form-data" },
   });
 
   return response.data;
@@ -57,9 +56,7 @@ export const getFutureForecast = async (
     filters.categories.forEach((c) => params.append("category", c));
   }
 
-  const response = await api.post(`/forecast/future?${params.toString()}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const response = await api.post(`/forecast/future?${params.toString()}`, formData);
 
   return response.data;
 };
@@ -77,9 +74,7 @@ export const getForecastKpis = async (file, futureDays = 30, filters = {}) => {
     filters.categories.forEach((c) => params.append("category", c));
   }
 
-  const response = await api.post(`/forecast/kpis?${params.toString()}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const response = await api.post(`/forecast/kpis?${params.toString()}`, formData);
 
   return response.data;
 };
@@ -107,9 +102,7 @@ export const runAlerts = async (
     filters.categories.forEach((c) => params.append("category", c));
   }
 
-  const response = await api.post(`/alerts/run?${params.toString()}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const response = await api.post(`/alerts/run?${params.toString()}`, formData);
 
   return response.data;
 };
