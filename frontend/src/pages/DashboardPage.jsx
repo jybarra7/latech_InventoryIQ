@@ -158,16 +158,23 @@ function DashboardPage() {
   useEffect(() => {
     if (!uploadedFile) return
 
-    // Clear stale filtered data immediately
     setFilteredKpis(null)
     setFilteredForecast(null)
-    setFilteredAlerts(null)
+
+    // Only clear alerts if store or region changed
+    if (selectedStores.length === 0 && selectedRegions.length === 0) {
+      // Keep existing alerts when only category filter changes
+    } else {
+      setFilteredAlerts(null)
+    }
 
     if (selectedStores.length > 0 || selectedCategories.length > 0 || horizon !== 'Next 90 days') {
       applyBackendFilters()
+    } else if (selectedStores.length === 0 && selectedCategories.length === 0 && horizon === 'Next 90 days') {
+      setFilteredAlerts(null)
     }
-  }, [selectedStores, selectedCategories, horizon])
-
+  }, [selectedStores, selectedCategories, horizon, selectedRegions])
+  
   async function applyBackendFilters() {
     if (!uploadedFile) return
     setIsFiltering(true)
@@ -178,15 +185,36 @@ function DashboardPage() {
       categories: selectedCategories,
     }
 
+    // Alerts only re-run when store or region changes
+    // Category filter does NOT affect alerts — business wide warnings
+    // should always show regardless of category view
+    const alertFilters = {
+      stores: selectedStores.map(s => parseInt(s)).filter(Boolean),
+    }
+
+    const onlyCategoryChanged = selectedStores.length === 0 &&
+      selectedRegions.length === 0 &&
+      selectedCategories.length > 0
+
     try {
-      const [kpiResult, forecastResult, alertsResult] = await Promise.all([
-        getForecastKpis(uploadedFile, 30, filters),
-        getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
-        runAlerts(uploadedFile, { filters }),
-      ])
-      setFilteredKpis(kpiResult)
-      setFilteredForecast(forecastResult)
-      setFilteredAlerts(alertsResult)
+      if (onlyCategoryChanged) {
+        // Skip alerts re-call — keeps existing alerts and saves a backend call
+        const [kpiResult, forecastResult] = await Promise.all([
+          getForecastKpis(uploadedFile, 30, filters),
+          getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
+        ])
+        setFilteredKpis(kpiResult)
+        setFilteredForecast(forecastResult)
+      } else {
+        const [kpiResult, forecastResult, alertsResult] = await Promise.all([
+          getForecastKpis(uploadedFile, 30, filters),
+          getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
+          runAlerts(uploadedFile, { filters: alertFilters }),
+        ])
+        setFilteredKpis(kpiResult)
+        setFilteredForecast(forecastResult)
+        setFilteredAlerts(alertsResult)
+      }
     } catch (err) {
       console.error('Filter API error:', err)
     } finally {
@@ -418,9 +446,9 @@ function DashboardPage() {
         </header>
 
         <div className="db-content">
-          {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} />}
-          {activeTab === 'products' && <ProductsTab data={data} />}
-          {activeTab === 'analysis' && <AnalysisTab data={data} />}
+          {activeTab === 'overview' && <OverviewTab data={data} horizon={horizon} isFiltering={isFiltering} />}
+          {activeTab === 'products' && <ProductsTab data={data} isFiltering={isFiltering} />}
+          {activeTab === 'analysis' && <AnalysisTab data={data} isFiltering={isFiltering} />}
         </div>
       </div>
 
@@ -429,7 +457,7 @@ function DashboardPage() {
 }
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
-function OverviewTab({ data, horizon }) {
+function OverviewTab({ data, horizon, isFiltering }) {
   const { kpis, alertsData, forecastChart, monthlyChart } = data
   const alerts = alertsData?.alerts ?? []
 
@@ -509,7 +537,7 @@ function OverviewTab({ data, horizon }) {
             <span><span style={{display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#1e3a5f', marginRight:4}} />Historical</span>
             <span><span style={{display:'inline-block', width:8, height:8, borderRadius:'50%', background:'#2196f3', marginRight:4}} />Forecast</span>
           </div>
-          <div className="chart-wrap">
+          <div className={`chart-wrap ${isFiltering ? 'updating' : ''}`}>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={combinedChart} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
@@ -571,7 +599,7 @@ function OverviewTab({ data, horizon }) {
 }
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
-function ProductsTab({ data }) {
+function ProductsTab({ data, isFiltering }) {
   const { topProducts, bottomProducts, top10Products } = data
   const chartData = top10Products.slice(0, 10).map(p => ({ name: p.product, revenue: p.total_sales })).reverse()
 
@@ -613,7 +641,7 @@ function ProductsTab({ data }) {
       <div className="panel">
         <p className="panel-title">Top 10 Products by Revenue</p>
         <p className="panel-sub">Your highest earning products across all stores</p>
-        <div className="chart-wrap">
+        <div className={`chart-wrap ${isFiltering ? 'updating' : ''}`}>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 10, right: 80, left: 20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
@@ -638,7 +666,7 @@ function ProductsTab({ data }) {
 }
 
 // ── ANALYSIS ──────────────────────────────────────────────────────────────────
-function AnalysisTab({ data }) {
+function AnalysisTab({ data, isFiltering }) {
   const { categorySales, storeSales, monthlyChart } = data
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -661,7 +689,7 @@ function AnalysisTab({ data }) {
       <div className="panel">
         <p className="panel-title">Year-over-Year Revenue Comparison</p>
         <p className="panel-sub">Monthly revenue compared across each year in your dataset</p>
-        <div className="chart-wrap">
+        <div className={`chart-wrap ${isFiltering ? 'updating' : ''}`}>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={yoyData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
@@ -687,7 +715,7 @@ function AnalysisTab({ data }) {
           {categorySales.length === 0 ? (
             <div className="chart-zone" style={{minHeight: '200px', marginTop: '1rem'}}>No category data in this dataset</div>
           ) : (
-            <div className="chart-wrap">
+            <div className={`chart-wrap ${isFiltering ? 'updating' : ''}`}>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={categorySales.map(c => ({ name: c.category, revenue: c.total_sales }))} margin={{ top: 10, right: 20, left: 10, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
@@ -709,7 +737,7 @@ function AnalysisTab({ data }) {
           {storeSales.length === 0 ? (
             <div className="chart-zone" style={{minHeight: '200px', marginTop: '1rem'}}>No store data in this dataset</div>
           ) : (
-            <div className="chart-wrap">
+            <div className={`chart-wrap ${isFiltering ? 'updating' : ''}`}>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart
                   data={storeSales

@@ -66,23 +66,49 @@ function UploadPage() {
             return row
           })
 
-          const ITEM_PRIORITY = ['product_name', 'name', 'item_name', 'description', 'product', 'item', 'sku', 'product_id']
-          const itemCol = ITEM_PRIORITY.find(p => headers.includes(p)) || 'item'
+          const SALES_PRIORITY = [
+            'sales', 'revenue', 'amount', 'total', 'gross_sales',
+            'net_sales', 'sale_amount', 'sales_amount', 'total_sales',
+            'price', 'income', 'gross', 'net', 'value'
+          ]
+          const ITEM_PRIORITY = [
+            'product_name', 'name', 'item_name', 'description', 'product',
+            'product_description', 'item_description', 'item', 'sku',
+            'product_sku', 'product_code', 'upc', 'product_id'
+          ]
+          const STORE_PRIORITY = [
+            'store_name', 'store', 'store_id', 'store_number', 'store_num',
+            'store_no', 'branch', 'branch_id', 'location', 'location_id',
+            'shop', 'shop_id'
+          ]
+          const CATEGORY_PRIORITY = [
+            'category', 'department', 'dept', 'product_category',
+            'prod_category', 'type', 'segment', 'product_type'
+          ]
+          const DATE_PRIORITY = [
+            'date', 'order_date', 'transaction_date', 'invoice_date',
+            'sale_date', 'trans_date', 'order_dt', 'day', 'datetime'
+          ]
+          const REGION_PRIORITY = [
+            'region', 'state', 'area', 'territory', 'zone',
+            'geography', 'market', 'district', 'country'
+          ]
 
-          const STORE_PRIORITY = ['store_name', 'store', 'store_id', 'store_number', 'branch']
-          const storeCol = STORE_PRIORITY.find(p => headers.includes(p)) || 'store'
+          const salesCol = headers.find(h => SALES_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const itemCol = headers.find(h => ITEM_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const storeCol = headers.find(h => STORE_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const categoryCol = headers.find(h => CATEGORY_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const dateCol = headers.find(h => DATE_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const regionCol = headers.find(h => REGION_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
 
-          const CATEGORY_PRIORITY = ['category', 'department', 'type', 'segment']
-          const categoryCol = CATEGORY_PRIORITY.find(p => headers.includes(p)) || null
-
-          const DATE_PRIORITY = ['date', 'order_date', 'transaction_date', 'invoice_date']
-          const dateCol = DATE_PRIORITY.find(p => headers.includes(p)) || 'date'
-
-          const SALES_PRIORITY = ['sales', 'revenue', 'amount', 'total', 'price']
-          const salesCol = SALES_PRIORITY.find(p => headers.includes(p)) || 'sales'
-
-          const REGION_PRIORITY = ['region', 'state', 'area', 'territory', 'zone', 'market']
-          const regionCol = REGION_PRIORITY.find(p => headers.includes(p)) || null
+          if (!salesCol) {
+            reject(new Error(`Could not find a sales/revenue column. Detected columns: ${headers.join(', ')}`))
+            return
+          }
+          if (!dateCol) {
+            reject(new Error(`Could not find a date column. Detected columns: ${headers.join(', ')}`))
+            return
+          }
 
           const productSales = {}
           const storeSales = {}
@@ -148,6 +174,32 @@ function UploadPage() {
       reader.onerror = reject
       reader.readAsText(file)
     })
+  }
+
+  function formatError(err) {
+    const msg = String(err)
+    if (msg.includes('date column') || msg.includes('sales column') || msg.includes('Missing:')) {
+      return 'Your file is missing required columns. Please make sure your CSV has at least a date column and a sales or revenue column.'
+    }
+    if (msg.includes('Could not find a sales')) {
+      return 'We could not detect a sales or revenue column in your file. Common names we look for: sales, revenue, amount, total.'
+    }
+    if (msg.includes('Could not find a date')) {
+      return 'We could not detect a date column in your file. Common names we look for: date, order_date, transaction_date.'
+    }
+    if (msg.includes('Could not parse') || msg.includes('parse')) {
+      return 'Your file could not be read. Please make sure it is a valid CSV or Excel file.'
+    }
+    if (msg.includes('422')) {
+      return 'Your data could not be processed. Please check that your sales values are numbers and dates are in a standard format like YYYY-MM-DD.'
+    }
+    if (msg.includes('404') || msg.includes('not found')) {
+      return 'Could not connect to the server. Please make sure the backend is running.'
+    }
+    if (msg.includes('timeout') || msg.includes('network')) {
+      return 'Connection timed out. Your file may be too large or the server is taking too long.'
+    }
+    return msg.replace('Upload error:', '').replace('Input dataframe is missing required columns:', 'Missing required columns:').trim()
   }
 
   async function handleContinue() {
@@ -236,9 +288,79 @@ function UploadPage() {
             <>
               <div className="upload-header">
                 <h1>Upload Your Data</h1>
-                <p>Drop your retail CSV or Excel file.<br />We handle the rest.</p>
+                <p>Drop your retail CSV or Excel file. We handle the rest.</p>
               </div>
 
+              {/* ── Requirements grid ── */}
+              <div className="upload-req-grid">
+
+                <div className="upload-req-card upload-req-card--required">
+                  <div className="upload-req-card-label">
+                    <span className="upload-req-dot upload-req-dot--required" />
+                    Required Columns
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--required">📅</div>
+                    <div>
+                      <strong>Date</strong>
+                      <span>date, order_date, transaction_date…</span>
+                    </div>
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--required">💰</div>
+                    <div>
+                      <strong>Sales / Revenue</strong>
+                      <span>sales, revenue, amount, total…</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="upload-req-card upload-req-card--optional">
+                  <div className="upload-req-card-label">
+                    <span className="upload-req-dot upload-req-dot--optional" />
+                    Optional — Highly Recommended
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--optional">🏪</div>
+                    <div>
+                      <strong>Store / Branch</strong>
+                      <span>Unlocks store filters &amp; comparison</span>
+                    </div>
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--optional">📦</div>
+                    <div>
+                      <strong>Product Name / SKU</strong>
+                      <span>Unlocks top &amp; bottom performers</span>
+                    </div>
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--optional">🏷️</div>
+                    <div>
+                      <strong>Category / Department</strong>
+                      <span>Unlocks category breakdown</span>
+                    </div>
+                  </div>
+                  <div className="upload-req-field">
+                    <div className="upload-req-icon upload-req-icon--optional">🗺️</div>
+                    <div>
+                      <strong>Region / Market</strong>
+                      <span>Unlocks regional filters &amp; insights</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* ── Disclaimer banner ── */}
+              <div className="upload-disclaimer">
+                <span className="upload-disclaimer-icon">⚠️</span>
+                <p>
+                  <strong>Optional columns are highly recommended.</strong> Without them, several dashboard sections will be limited or empty — including Top &amp; Bottom Performers, Category Breakdown, Store Comparison, and regional filters. You'll still get forecasts and trend data, but the full power of InventoryIQ comes from richer data.
+                </p>
+              </div>
+
+              {/* ── Drop zone ── */}
               <div
                 className={`upload-dropzone ${isDragging ? 'dragging' : ''} ${uploadedFile ? 'success' : ''}`}
                 onDragOver={handleDragOver}
@@ -276,10 +398,11 @@ function UploadPage() {
 
               {error && (
                 <div className="upload-error">
-                  ⚠️ {error}
-                  <p className="upload-error-hint">
-                    Make sure the backend is running at localhost:8000
-                  </p>
+                  <p className="upload-error-title">⚠️ Unable to process your file</p>
+                  <p className="upload-error-body">{formatError(error)}</p>
+                  {error.toLowerCase().includes('not found') || error.toLowerCase().includes('network') || error.toLowerCase().includes('localhost') ? (
+                    <p className="upload-error-hint">Make sure the backend server is running</p>
+                  ) : null}
                 </div>
               )}
 
