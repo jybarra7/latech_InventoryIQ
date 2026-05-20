@@ -1,10 +1,21 @@
 import { useNavigate } from 'react-router-dom'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
 
 function UploadPage() {
   const navigate = useNavigate()
+
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+  useEffect(() => {
+    if (isIOS) {
+      navigate('/dashboard')
+    }
+  }, [navigate, isIOS])
+
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState(null)
