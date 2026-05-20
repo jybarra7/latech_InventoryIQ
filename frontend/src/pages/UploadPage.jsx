@@ -66,23 +66,51 @@ function UploadPage() {
             return row
           })
 
-          const ITEM_PRIORITY = ['product_name', 'name', 'item_name', 'description', 'product', 'item', 'sku', 'product_id']
-          const itemCol = ITEM_PRIORITY.find(p => headers.includes(p)) || 'item'
+          const SALES_PRIORITY = [
+            'sales', 'revenue', 'amount', 'total', 'gross_sales',
+            'net_sales', 'sale_amount', 'sales_amount', 'total_sales',
+            'price', 'income', 'gross', 'net', 'value'
+          ]
+          const ITEM_PRIORITY = [
+            'product_name', 'name', 'item_name', 'description', 'product',
+            'product_description', 'item_description', 'item', 'sku',
+            'product_sku', 'product_code', 'upc', 'product_id'
+          ]
+          const STORE_PRIORITY = [
+            'store_name', 'store', 'store_id', 'store_number', 'store_num',
+            'store_no', 'branch', 'branch_id', 'location', 'location_id',
+            'shop', 'shop_id'
+          ]
+          const CATEGORY_PRIORITY = [
+            'category', 'department', 'dept', 'product_category',
+            'prod_category', 'type', 'segment', 'product_type'
+          ]
+          const DATE_PRIORITY = [
+            'date', 'order_date', 'transaction_date', 'invoice_date',
+            'sale_date', 'trans_date', 'order_dt', 'day', 'datetime'
+          ]
+          const REGION_PRIORITY = [
+            'region', 'state', 'area', 'territory', 'zone',
+            'geography', 'market', 'district', 'country'
+          ]
 
-          const STORE_PRIORITY = ['store_name', 'store', 'store_id', 'store_number', 'branch']
-          const storeCol = STORE_PRIORITY.find(p => headers.includes(p)) || 'store'
+          // Fuzzy matching — catches partial matches and close variations
+          const salesCol = headers.find(h => SALES_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const itemCol = headers.find(h => ITEM_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const storeCol = headers.find(h => STORE_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const categoryCol = headers.find(h => CATEGORY_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const dateCol = headers.find(h => DATE_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
+          const regionCol = headers.find(h => REGION_PRIORITY.some(p => h === p || h.includes(p) || p.includes(h))) || null
 
-          const CATEGORY_PRIORITY = ['category', 'department', 'type', 'segment']
-          const categoryCol = CATEGORY_PRIORITY.find(p => headers.includes(p)) || null
-
-          const DATE_PRIORITY = ['date', 'order_date', 'transaction_date', 'invoice_date']
-          const dateCol = DATE_PRIORITY.find(p => headers.includes(p)) || 'date'
-
-          const SALES_PRIORITY = ['sales', 'revenue', 'amount', 'total', 'price']
-          const salesCol = SALES_PRIORITY.find(p => headers.includes(p)) || 'sales'
-
-          const REGION_PRIORITY = ['region', 'state', 'area', 'territory', 'zone', 'market']
-          const regionCol = REGION_PRIORITY.find(p => headers.includes(p)) || null
+          // Validate required columns
+          if (!salesCol) {
+            reject(new Error(`Could not find a sales/revenue column. Detected columns: ${headers.join(', ')}`))
+            return
+          }
+          if (!dateCol) {
+            reject(new Error(`Could not find a date column. Detected columns: ${headers.join(', ')}`))
+            return
+          }
 
           const productSales = {}
           const storeSales = {}
