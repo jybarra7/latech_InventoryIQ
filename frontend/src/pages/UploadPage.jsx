@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
-import { runForecast, getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
+import { getFutureForecast, getForecastKpis, runAlerts, parseApiError } from '../api/client'
 import './UploadPage.css'
 
 function UploadPage() {
@@ -66,7 +66,7 @@ function UploadPage() {
             return row
           })
 
-          // Find column names flexibly
+          // Find column names by priority
           const ITEM_PRIORITY = ['product_name', 'name', 'item_name', 'description', 'product', 'item', 'sku', 'product_id']
           const itemCol = ITEM_PRIORITY.find(p => headers.includes(p)) || 'item'
 
@@ -82,23 +82,29 @@ function UploadPage() {
           const SALES_PRIORITY = ['sales', 'revenue', 'amount', 'total', 'price']
           const salesCol = SALES_PRIORITY.find(p => headers.includes(p)) || 'sales'
 
-          // Aggregate sales by product
+          const REGION_PRIORITY = ['region', 'state', 'area', 'territory', 'zone', 'market']
+          const regionCol = REGION_PRIORITY.find(p => headers.includes(p)) || null
+
+          // Aggregate sales
           const productSales = {}
           const storeSales = {}
           const categorySales = {}
           const monthlyTotal = {}
 
-          rows.forEach(row => {
+          const rawRows = rows.map(row => {
             const sales = parseFloat(row[salesCol]) || 0
-            const item = row[itemCol] || 'Unknown'
+            const product = row[itemCol] || 'Unknown'
             const store = row[storeCol] || 'Unknown'
             const category = categoryCol ? (row[categoryCol] || 'Unknown') : null
             const date = row[dateCol] ? row[dateCol].slice(0, 7) : null
+            const region = regionCol ? (row[regionCol] || null) : null
 
-            productSales[item] = (productSales[item] || 0) + sales
+            productSales[product] = (productSales[product] || 0) + sales
             storeSales[store] = (storeSales[store] || 0) + sales
             if (category) categorySales[category] = (categorySales[category] || 0) + sales
             if (date) monthlyTotal[date] = (monthlyTotal[date] || 0) + sales
+
+            return { sales, product, store, category, date, region }
           })
 
           const sortedProducts = Object.entries(productSales)
@@ -121,6 +127,9 @@ function UploadPage() {
           const uniqueCategories = categoryCol
             ? [...new Set(rows.map(r => r[categoryCol]).filter(Boolean))].sort()
             : []
+          const uniqueRegions = regionCol
+            ? [...new Set(rows.map(r => r[regionCol]).filter(Boolean))].sort()
+            : []
 
           resolve({
             topProducts: sortedProducts.slice(0, 10),
@@ -131,6 +140,8 @@ function UploadPage() {
             monthlyChart,
             uniqueStores,
             uniqueCategories,
+            uniqueRegions,
+            rawRows,
           })
         } catch (err) {
           reject(err)
@@ -167,6 +178,7 @@ function UploadPage() {
           alertsData: alertsResult,
           fileName: uploadedFile.name,
           csvData: csvData,
+          file: uploadedFile,
         }
       })
 
@@ -180,7 +192,6 @@ function UploadPage() {
   return (
     <div className="upload-page">
 
-      {/* Navbar */}
       <nav className="upload-nav">
         <img
           src="/logo.webp"
@@ -191,7 +202,6 @@ function UploadPage() {
         />
       </nav>
 
-      {/* Centered card */}
       <div className="upload-center">
         <div className="upload-card">
 
@@ -201,13 +211,9 @@ function UploadPage() {
               <p className="upload-loading-title">Analyzing your data</p>
               <p className="upload-loading-step">{loadingStep}</p>
               <div className="upload-loading-steps">
-                <div className={`upload-step-item ${loadingStep.includes('Reading') ? 'active' : ''} ${loadingStep.includes('forecast model') || loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
+                <div className={`upload-step-item ${loadingStep.includes('Reading') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
                   <span>Reading your data</span>
-                </div>
-                <div className={`upload-step-item ${loadingStep.includes('forecast model') ? 'active' : ''} ${loadingStep.includes('KPI') || loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
-                  <span className="upload-step-dot" />
-                  <span>Running forecast model</span>
                 </div>
                 <div className={`upload-step-item ${loadingStep.includes('KPI') ? 'active' : ''} ${loadingStep.includes('chart') || loadingStep.includes('alert') || loadingStep.includes('Almost') ? 'done' : ''}`}>
                   <span className="upload-step-dot" />
