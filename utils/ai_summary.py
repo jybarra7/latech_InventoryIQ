@@ -21,7 +21,7 @@ def get_gemini_client():
         return None, "google-genai is not installed."
         
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash"), None
+    return genai.GenerativeModel("gemini-2.5-flash"), None
 
 # -------------------------------
 # 1. BUILD AI PAYLOAD
