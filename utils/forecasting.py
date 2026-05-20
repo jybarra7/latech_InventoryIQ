@@ -134,17 +134,16 @@ def prepare_forecast_input(
     if rename_map:
         prepared = prepared.rename(columns=rename_map)
 
-    groups = group_cols or DEFAULT_GROUP_COLS
-    validate_input_frame(prepared, required_columns=[date_col, *groups, target_col])
+    groups = ["store", "item"]
+    validate_input_frame(prepared, required_columns=["date", *groups, "sales"])
 
-    prepared[date_col] = pd.to_datetime(prepared[date_col])
-    prepared[target_col] = pd.to_numeric(prepared[target_col], errors="coerce")
-    prepared = prepared.dropna(subset=[date_col, target_col, *groups]).copy()
+    prepared["date"] = pd.to_datetime(prepared["date"], errors="coerce")
+    prepared["sales"] = pd.to_numeric(prepared["sales"], errors="coerce")
+    prepared = prepared.dropna(subset=["date", "sales", *groups]).copy()
     if prepared.empty:
         raise ValueError("Input dataframe has no usable rows after cleaning.")
 
-    return prepared.sort_values([date_col, *groups]).reset_index(drop=True)
-
+    return prepared.sort_values(["date", *groups]).reset_index(drop=True)
 
 # Category: Data prep
 # Summary: Splits historical data by time, not randomly, so the models train on older rows and are tested on newer rows like a real forecasting workflow.
