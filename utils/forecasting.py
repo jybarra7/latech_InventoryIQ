@@ -64,6 +64,8 @@ def evaluate_forecast(actual: pd.Series, prediction: pd.Series) -> dict[str, flo
     }
 
 
+import re
+
 # Category: Data prep
 # Summary: Standardizes different retail CSV schemas so the forecasting functions can all expect date/store/item/sales columns instead of each function handling naming differences itself.
 def prepare_forecast_input(
@@ -75,11 +77,60 @@ def prepare_forecast_input(
     """Normalize supported retail schemas into date/store/item/sales shape."""
     prepared = df.copy()
 
+    def normalize_col(name: str) -> str:
+        name = str(name).strip().lower()
+        name = re.sub(r"[\s\-\/]+", "_", name)
+        name = re.sub(r"[^a-z0-9_]", "", name)
+        name = re.sub(r"_+", "_", name).strip("_")
+        return name
+
+    original_to_normalized = {col: normalize_col(col) for col in prepared.columns}
+    prepared = prepared.rename(columns=original_to_normalized)
+
+    cols = list(prepared.columns)
+
+    DATE_CANDIDATES = [
+        "date", "order_date", "transaction_date", "invoice_date", "sale_date"
+    ]
+    STORE_CANDIDATES = [
+        "store", "store_id", "store_name", "store_number", "branch", "branch_id", "location"
+    ]
+    ITEM_CANDIDATES = [
+        "item", "item_id", "item_name", "product", "product_id", "product_name",
+        "sku", "description", "name"
+    ]
+    SALES_CANDIDATES = [
+        "sales", "sales_amount", "revenue", "amount", "total", "price", "total_sales"
+    ]
+
+    def first_match(candidates):
+        for c in candidates:
+            if c in cols:
+                return c
+        return None
+
     rename_map = {}
-    if "store" not in prepared.columns and "store_id" in prepared.columns:
-        rename_map["store_id"] = "store"
-    if "item" not in prepared.columns and "product_id" in prepared.columns:
-        rename_map["product_id"] = "item"
+
+    if "date" not in cols:
+        found = first_match(DATE_CANDIDATES)
+        if found:
+            rename_map[found] = "date"
+
+    if "store" not in cols:
+        found = first_match(STORE_CANDIDATES)
+        if found:
+            rename_map[found] = "store"
+
+    if "item" not in cols:
+        found = first_match(ITEM_CANDIDATES)
+        if found:
+            rename_map[found] = "item"
+
+    if "sales" not in cols:
+        found = first_match(SALES_CANDIDATES)
+        if found:
+            rename_map[found] = "sales"
+
     if rename_map:
         prepared = prepared.rename(columns=rename_map)
 
