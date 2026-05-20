@@ -25,46 +25,39 @@ export const parseApiError = (error) => {
   if (error?.message) {
     return error.message;
   }
-  return 'Something went wrong while calling the API.';
-
   return "Something went wrong while calling the API.";
 };
 
 export const runForecast = async (file, horizonDays = 90) => {
   const formData = buildFileFormData(file);
-  const response = await api.post('/forecast/run', formData, {
 
   const response = await api.post("/forecast/run", formData, {
     params: { horizon_days: horizonDays },
     headers: { "Content-Type": "multipart/form-data" },
   });
+
   return response.data;
 };
 
-export const getFutureForecast = async (file, futureDays = 30, { fast = false, filters = {} } = {}) => {
-  const formData = buildFileFormData(file);
-  const params = new URLSearchParams()
-  params.append('future_days', futureDays)
-  params.append('fast', fast)
-  if (filters.stores?.length) {
-    filters.stores.forEach(s => params.append('store', s))
-  }
-  if (filters.categories?.length) {
-    filters.categories.forEach(c => params.append('category', c))
-  }
-  const response = await api.post(`/forecast/future?${params.toString()}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-  return response.data
 export const getFutureForecast = async (
   file,
   futureDays = 30,
-  { fast = false } = {}
+  { fast = false, filters = {} } = {}
 ) => {
   const formData = buildFileFormData(file);
+  const params = new URLSearchParams();
+  params.append("future_days", futureDays);
+  params.append("fast", fast);
 
-  const response = await api.post("/forecast/future", formData, {
-    params: { future_days: futureDays, fast },
+  if (filters.stores?.length) {
+    filters.stores.forEach((s) => params.append("store", s));
+  }
+
+  if (filters.categories?.length) {
+    filters.categories.forEach((c) => params.append("category", c));
+  }
+
+  const response = await api.post(`/forecast/future?${params.toString()}`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
@@ -73,18 +66,22 @@ export const getFutureForecast = async (
 
 export const getForecastKpis = async (file, futureDays = 30, filters = {}) => {
   const formData = buildFileFormData(file);
-  const params = new URLSearchParams()
-  params.append('future_days', futureDays)
+  const params = new URLSearchParams();
+  params.append("future_days", futureDays);
+
   if (filters.stores?.length) {
-    filters.stores.forEach(s => params.append('store', s))
+    filters.stores.forEach((s) => params.append("store", s));
   }
+
   if (filters.categories?.length) {
-    filters.categories.forEach(c => params.append('category', c))
+    filters.categories.forEach((c) => params.append("category", c));
   }
+
   const response = await api.post(`/forecast/kpis?${params.toString()}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-  return response.data
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  return response.data;
 };
 
 export const runAlerts = async (
@@ -97,33 +94,20 @@ export const runAlerts = async (
   } = {}
 ) => {
   const formData = buildFileFormData(file);
-  const params = new URLSearchParams()
-  params.append('anomaly_std', anomalyStd)
-  params.append('decline_pct', declinePct)
-  params.append('margin_floor', marginFloor)
+  const params = new URLSearchParams();
+  params.append("anomaly_std", anomalyStd);
+  params.append("decline_pct", declinePct);
+  params.append("margin_floor", marginFloor);
+
   if (filters.stores?.length) {
-    filters.stores.forEach(s => params.append('store', s))
+    filters.stores.forEach((s) => params.append("store", s));
   }
+
   if (filters.categories?.length) {
-    filters.categories.forEach(c => params.append('category', c))
+    filters.categories.forEach((c) => params.append("category", c));
   }
+
   const response = await api.post(`/alerts/run?${params.toString()}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-  return response.data
-
-  const response = await api.post("/forecast/kpis", formData, {
-    params: { future_days: futureDays },
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-
-  return response.data;
-};
-
-export const runAlerts = async (file) => {
-  const formData = buildFileFormData(file);
-
-  const response = await api.post("/alerts/run", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
