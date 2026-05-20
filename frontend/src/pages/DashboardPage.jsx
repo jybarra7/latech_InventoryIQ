@@ -70,6 +70,13 @@ function fmt(n) {
 
 const HORIZONS = ['Next 30 days', 'Next 90 days', 'Next 6 months', 'Next 12 months']
 
+const HORIZON_DAYS = {
+  'Next 30 days': 30,
+  'Next 90 days': 90,
+  'Next 6 months': 180,
+  'Next 12 months': 365,
+}
+
 function DashboardPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -85,17 +92,17 @@ function DashboardPage() {
   const [isFiltering, setIsFiltering] = useState(false)
 
   const apiState = location.state
-  const uploadedFile    = apiState?.file        ?? null
-  const kpis            = filteredKpis          ?? apiState?.kpiData    ?? mockData.kpis
-  const alertsData      = filteredAlerts        ?? apiState?.alertsData ?? mockData.alertsData
-  const fileName        = apiState?.fileName    ?? mockData.fileName
-  const csvData         = apiState?.csvData     ?? null
-  const uniqueStores    = csvData?.uniqueStores    ?? mockData.stores
+  const uploadedFile     = apiState?.file           ?? null
+  const kpis             = filteredKpis             ?? apiState?.kpiData    ?? mockData.kpis
+  const alertsData       = filteredAlerts           ?? apiState?.alertsData ?? mockData.alertsData
+  const fileName         = apiState?.fileName       ?? mockData.fileName
+  const csvData          = apiState?.csvData        ?? null
+  const uniqueStores     = csvData?.uniqueStores    ?? mockData.stores
   const uniqueCategories = csvData?.uniqueCategories ?? mockData.categories
-  const uniqueRegions   = csvData?.uniqueRegions   ?? []
-  const rawRows         = csvData?.rawRows         ?? null
+  const uniqueRegions    = csvData?.uniqueRegions   ?? []
+  const rawRows          = csvData?.rawRows         ?? null
 
-  // Filter raw CSV data on frontend
+  // Filter raw CSV data on frontend instantly
   const filteredCSV = rawRows ? (() => {
     let filtered = rawRows
 
@@ -147,30 +154,34 @@ function DashboardPage() {
     selectedRegions.length > 0 ||
     horizon !== 'Next 90 days'
 
-  // Re-call API when filters change
+  // Re-call backend when filters or horizon change
   useEffect(() => {
     if (!uploadedFile) return
 
-    if (selectedStores.length > 0 || selectedCategories.length > 0) {
+    // Clear stale filtered data immediately
+    setFilteredKpis(null)
+    setFilteredForecast(null)
+    setFilteredAlerts(null)
+
+    if (selectedStores.length > 0 || selectedCategories.length > 0 || horizon !== 'Next 90 days') {
       applyBackendFilters()
-    } else {
-      setFilteredKpis(null)
-      setFilteredForecast(null)
-      setFilteredAlerts(null)
     }
-  }, [selectedStores, selectedCategories])
+  }, [selectedStores, selectedCategories, horizon])
 
   async function applyBackendFilters() {
     if (!uploadedFile) return
     setIsFiltering(true)
+
+    const futureDays = HORIZON_DAYS[horizon] || 90
     const filters = {
       stores: selectedStores.map(s => parseInt(s)).filter(Boolean),
       categories: selectedCategories,
     }
+
     try {
       const [kpiResult, forecastResult, alertsResult] = await Promise.all([
         getForecastKpis(uploadedFile, 30, filters),
-        getFutureForecast(uploadedFile, 90, { fast: true, filters }),
+        getFutureForecast(uploadedFile, futureDays, { fast: true, filters }),
         runAlerts(uploadedFile, { filters }),
       ])
       setFilteredKpis(kpiResult)
@@ -183,6 +194,7 @@ function DashboardPage() {
     }
   }
 
+  // Build forecast chart — SUM all predictions per month to match historical scale
   const forecastSource = filteredForecast ?? apiState?.forecastData
   const forecastChart = forecastSource?.forecast_records
     ? (() => {
@@ -190,17 +202,27 @@ function DashboardPage() {
         const byMonth = {}
         records.forEach(r => {
           const month = r.date.slice(0, 7)
-          if (!byMonth[month]) byMonth[month] = { total: 0, count: 0 }
+          if (!byMonth[month]) byMonth[month] = { total: 0 }
           byMonth[month].total += r.prediction
-          byMonth[month].count += 1
         })
-        return Object.entries(byMonth)
+        const forecastPoints = Object.entries(byMonth)
           .sort(([a], [b]) => a.localeCompare(b))
-          .slice(-12)
           .map(([month, data]) => ({
             date: month,
-            value: Math.round(data.total / data.count),
+            value: Math.round(data.total),
           }))
+
+        // Bridge the gap — add last historical point as first forecast point
+        const currentMonthlyChart = filteredCSV?.monthlyChart ?? csvData?.monthlyChart ?? []
+        if (currentMonthlyChart.length > 0 && forecastPoints.length > 0) {
+          const lastHistorical = currentMonthlyChart[currentMonthlyChart.length - 1]
+          forecastPoints.unshift({
+            date: lastHistorical.date,
+            value: lastHistorical.total_sales,
+          })
+        }
+
+        return forecastPoints
       })()
     : mockData.forecastChart
 
@@ -410,7 +432,6 @@ function DashboardPage() {
 function OverviewTab({ data, horizon }) {
   const { kpis, alertsData, forecastChart, monthlyChart } = data
   const alerts = alertsData?.alerts ?? []
-  const bad = alerts.filter(a => a.severity >= 1.5)
 
   const projectedRevenue = () => {
     const base = kpis.total_sales
@@ -428,6 +449,7 @@ function OverviewTab({ data, horizon }) {
     })
     forecastChart.forEach(d => {
       if (merged[d.date]) {
+        // Bridge point — show both actual and forecast at the junction
         merged[d.date].forecast = d.value ?? null
       } else {
         merged[d.date] = { date: d.date, actual: null, forecast: d.value ?? null }
@@ -443,7 +465,7 @@ function OverviewTab({ data, horizon }) {
         <span className="ai-insight-icon">✦</span>
         <span className="ai-insight-label">AI INSIGHT</span>
         <span className="ai-insight-text">
-          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae ?? 'N/A'}. {bad.length} products need your attention.
+          Sales are {kpis.forecast_direction} — model accuracy MAE {kpis.mae ?? 'N/A'}. {alerts.length} products need your attention.
         </span>
         <button className="ai-insight-btn">Full Summary</button>
       </div>
@@ -469,7 +491,7 @@ function OverviewTab({ data, horizon }) {
           <p className="kpi-label">Active Alerts</p>
           <p className="kpi-value">{alertsData?.total ?? 0}</p>
           <p className="kpi-delta" style={{ color: 'rgba(255,255,255,0.8)' }}>
-            {(alertsData?.total ?? 0) === 0 ? '✅ All clear' : `⚠ ${bad.length} need attention`}
+            {(alertsData?.total ?? 0) === 0 ? '✅ All clear' : `⚠ ${alertsData?.total} need attention`}
           </p>
         </div>
         <div className="kpi-card">
@@ -593,11 +615,7 @@ function ProductsTab({ data }) {
         <p className="panel-sub">Your highest earning products across all stores</p>
         <div className="chart-wrap">
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 10, right: 80, left: 20, bottom: 0 }}
-            >
+            <BarChart data={chartData} layout="vertical" margin={{ top: 10, right: 80, left: 20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10, fill: '#8aaac8' }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#1e3a5f', fontWeight: 500 }} axisLine={false} tickLine={false} width={160} interval={0} />

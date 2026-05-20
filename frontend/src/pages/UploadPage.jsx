@@ -66,7 +66,6 @@ function UploadPage() {
             return row
           })
 
-          // Find column names by priority
           const ITEM_PRIORITY = ['product_name', 'name', 'item_name', 'description', 'product', 'item', 'sku', 'product_id']
           const itemCol = ITEM_PRIORITY.find(p => headers.includes(p)) || 'item'
 
@@ -85,7 +84,6 @@ function UploadPage() {
           const REGION_PRIORITY = ['region', 'state', 'area', 'territory', 'zone', 'market']
           const regionCol = REGION_PRIORITY.find(p => headers.includes(p)) || null
 
-          // Aggregate sales
           const productSales = {}
           const storeSales = {}
           const categorySales = {}
